@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { ArrowDown, ArrowUp, Boxes, PlugZap, ShieldBan, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router";
 import { DetailTile, SummaryCard } from "../components/shared/detail-tile";
 import { EmptyState } from "../components/shared/empty-state";
 import { PageHeader } from "../components/shared/page-header";
@@ -21,12 +22,20 @@ type SortDirection = "desc" | "asc";
 export function ProcessesPage() {
   const { data, isLoading } = useSystemSnapshotQuery();
   const { data: info } = useInfoQuery();
+  const navigate = useNavigate();
   const actionMutation = useProcessActionMutation({ successMessage: false });
   const [killCandidate, setKillCandidate] = useState<ProcessInfo | null>(null);
   const [detailProcess, setDetailProcess] = useState<ProcessInfo | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [sortKey, setSortKey] = useState<ProcessSortKey>("cpu");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  // PID filter from URL (e.g. ?pid=1234 from clicking a PID in Ports/Alerts/Tree)
+  const urlPID = searchParams.get("pid");
+  const urlPIDNum = urlPID ? Number(urlPID) : null;
   const debouncedSearch = useDebouncedValue(searchValue, 300);
   const processes = data?.processes ?? [];
   const selfPID = info?.self_pid ?? null;
@@ -44,22 +53,51 @@ export function ProcessesPage() {
       connections: portCountByPID.get(process.pid) ?? process.connections,
     }));
     const needle = debouncedSearch.trim().toLowerCase();
-    const base = !needle
-      ? enriched
-      : enriched.filter((process) => {
-          return process.name.toLowerCase().includes(needle) || String(process.pid).includes(needle);
-        });
+    let base = enriched;
+
+    // PID filter from URL (when navigating from Ports/Alerts/Tree)
+    if (urlPIDNum !== null) {
+      base = base.filter((p) => p.pid === urlPIDNum);
+    }
+
+    if (needle) {
+      base = base.filter((process) => {
+        return process.name.toLowerCase().includes(needle) || String(process.pid).includes(needle);
+      });
+    }
 
     const sorted = [...base];
     sorted.sort((left, right) => compareProcesses(left, right, sortKey, sortDirection));
     return sorted;
-  }, [debouncedSearch, portCountByPID, processes, sortDirection, sortKey]);
+  }, [debouncedSearch, portCountByPID, processes, sortDirection, sortKey, urlPIDNum]);
 
   const topProcess = filteredProcesses[0] ?? null;
   const memoryLeader = [...filteredProcesses].sort((left, right) => right.working_set - left.working_set)[0] ?? null;
   const detailPID = detailProcess?.pid ?? null;
   const { data: processConnections = [], isLoading: connectionsLoading } = useProcessConnectionsQuery(detailPID);
   const portSummary = useMemo(() => summarizePorts(processConnections), [processConnections]);
+
+  // Keyboard navigation: j/k to move, Enter to select, Escape to close
+  useEffect(() => {
+    if (detailProcess || killCandidate) return;
+    const handler = (e: KeyboardEvent) => {
+      const rows = tableRef.current?.querySelectorAll<HTMLTableRowElement>("tbody tr");
+      if (!rows || rows.length === 0) return;
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.min(i + 1, rows.length - 1));
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const row = rows[selectedIndex >= 0 ? selectedIndex : 0];
+        if (row) row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [detailProcess, killCandidate, selectedIndex]);
 
   const updateSort = (nextKey: ProcessSortKey) => {
     if (sortKey === nextKey) {
@@ -88,6 +126,16 @@ export function ProcessesPage() {
           icon={Boxes}
           meta={
             <>
+              {urlPIDNum !== null && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-accent bg-accent-muted/45 px-2 py-0.5 text-xs font-semibold text-accent transition-colors hover:bg-accent-muted"
+                  onClick={() => setSearchParams({})}
+                  title="Clear PID filter"
+                >
+                  PID {urlPIDNum} <X className="h-3 w-3" />
+                </button>
+              )}
               <Badge variant="info">{filteredProcesses.length} visible</Badge>
               <Badge variant={topProcess && topProcess.cpu_percent >= 80 ? "warning" : "success"}>
                 {topProcess ? `${topProcess.name} leads CPU` : "Stable"}
@@ -196,7 +244,7 @@ export function ProcessesPage() {
             ))}
           </div>
 
-          <div className={filteredProcesses.length === 0 ? "hidden" : "hidden md:block"}>
+          <div className={filteredProcesses.length === 0 ? "hidden" : "hidden md:block"} ref={tableRef}>
             <table className="dense-table min-w-full table-fixed text-left text-sm">
               <thead className="border-b border-border bg-background/55">
                 <tr>
@@ -223,21 +271,34 @@ export function ProcessesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredProcesses.map((process) => {
+                {filteredProcesses.map((process, index) => {
                   const isSelf = process.pid === selfPID;
                   const actionsDisabled = actionMutation.isPending || process.is_critical || isSelf;
                   const rowState = isSelf ? "WTM" : process.is_critical ? "Critical" : "Ready";
+                  const isSelected = index === selectedIndex;
 
                   return (
                     <tr
                       key={process.pid}
                       className={
-                        detailProcess?.pid === process.pid
+                        isSelected
+                          ? "border-b border-border bg-accent text-accent-foreground transition-colors"
+                          : detailProcess?.pid === process.pid
                           ? "border-b border-border bg-accent-muted/45 transition-colors"
                           : "border-b border-border transition-colors hover:bg-background/55"
                       }
+                      onClick={() => setDetailProcess(process)}
                     >
-                      <td className="px-4 py-2.5 pr-3 font-mono text-secondary whitespace-nowrap sm:px-5">{process.pid}</td>
+                      <td className="px-4 py-2.5 pr-3 font-mono whitespace-nowrap sm:px-5">
+                        <button
+                          type="button"
+                          className="font-mono text-secondary hover:text-accent transition-colors"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/processes?pid=${process.pid}`); }}
+                          title={`Filter to PID ${process.pid}`}
+                        >
+                          {process.pid}
+                        </button>
+                      </td>
                       <td className="max-w-[12rem] py-2.5 pr-3 text-foreground">
                         <button
                           type="button"

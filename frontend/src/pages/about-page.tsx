@@ -3,11 +3,12 @@ import { SummaryCard } from "../components/shared/detail-tile";
 import { PageHeader } from "../components/shared/page-header";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
-import { useAIStatusQuery, useSystemSnapshotQuery } from "../lib/api-client";
+import { useAIStatusQuery, useInfoQuery, useSystemSnapshotQuery } from "../lib/api-client";
 
 export function AboutPage() {
   const { data: system } = useSystemSnapshotQuery();
   const { data: aiStatus } = useAIStatusQuery();
+  const { data: info } = useInfoQuery();
 
   return (
     <div className="space-y-6">
@@ -20,6 +21,7 @@ export function AboutPage() {
           <>
             <Badge variant="success">Localhost</Badge>
             <Badge variant={aiStatus?.enabled ? "info" : "neutral"}>{aiStatus?.enabled ? "AI available" : "AI optional"}</Badge>
+            {info?.version && <Badge variant="neutral">v{info.version}</Badge>}
           </>
         }
       />
@@ -47,7 +49,10 @@ export function AboutPage() {
             <h2 className="section-title">What WTM gives you</h2>
             <p className="mt-1 text-sm leading-6 text-secondary">A local operator console for telemetry, guarded control, automation, alerts, and optional AI-assisted triage.</p>
           </div>
-          <Badge variant="success">Local-first</Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="success">Local-first</Badge>
+            {info?.version && <Badge variant="neutral">v{info.version}</Badge>}
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <StackItem label="Live telemetry" value="CPU, memory, GPU, disks, ports, process tree, and network activity in one pass." />
@@ -71,6 +76,35 @@ export function AboutPage() {
           <BehaviorRow icon={Workflow} title="Built for triage" description="Each page answers a different operator question: what is hot, where it came from, what ports it owns, and what to do next." />
         </div>
       </Card>
+
+      {info ? (
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="section-title">Technical details</h2>
+            <Badge variant="neutral">Build info</Badge>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <DetailRow label="Version" value={info.version} />
+            <DetailRow label="Go runtime" value={info.go_version} />
+            <DetailRow label="Logical CPUs" value={String(info.num_cpu)} />
+            <DetailRow label="Goroutines" value={String(info.goroutines)} />
+            <DetailRow label="Self PID" value={String(info.self_pid)} />
+            <DetailRow label="SSE clients" value={String(info.sse_clients)} />
+            <DetailRow label="Monitored PIDs" value={String(info.tracked_pids)} />
+            <DetailRow label="Collector interval" value={`${info.interval_ms} ms`} />
+            <DetailRow label="History window" value={`${info.history_minutes} min`} />
+          </div>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+      <span className="text-sm text-secondary">{label}</span>
+      <span className="font-mono text-sm font-medium text-foreground">{value}</span>
     </div>
   );
 }

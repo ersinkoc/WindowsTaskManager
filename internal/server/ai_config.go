@@ -302,3 +302,30 @@ func isSensitiveHeaderKey(key string) bool {
 		return false
 	}
 }
+
+func (s *Server) handleAITest(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	if cfg.AI.APIKey == "" {
+		writeError(w, http.StatusBadRequest, "no_api_key", "no API key configured")
+		return
+	}
+	if cfg.AI.Endpoint == "" {
+		writeError(w, http.StatusBadRequest, "no_endpoint", "no endpoint configured")
+		return
+	}
+	if !cfg.AI.Enabled {
+		writeError(w, http.StatusBadRequest, "ai_disabled", "AI is disabled")
+		return
+	}
+
+	ctx := r.Context()
+	result, err := s.advisor.Chat(ctx, "Reply with exactly the word 'ok' if you can read this.")
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "ai_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "response": result.Answer})
+}

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { GitBranch, Search, TriangleAlert } from "lucide-react";
+import { useNavigate } from "react-router";
+import { ConfirmDialog } from "../components/shared/confirm-dialog";
 import { SummaryCard } from "../components/shared/detail-tile";
 import { EmptyState } from "../components/shared/empty-state";
 import { FilterChip } from "../components/shared/filter-chip";
@@ -9,12 +11,16 @@ import { SearchInput } from "../components/shared/search-input";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { useSystemSnapshotQuery } from "../lib/api-client";
+import { useProcessActionMutation } from "../lib/api-client";
 import type { ProcessNode } from "../types/api";
 
 export function TreePage() {
   const { data, isLoading } = useSystemSnapshotQuery();
+  const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
   const [showOnlyOrphans, setShowOnlyOrphans] = useState(false);
+  const [actionTarget, setActionTarget] = useState<{ pid: number; name: string; action: "kill" | "suspend" | "resume" } | null>(null);
+  const actionMutation = useProcessActionMutation({ successMessage: false });
   const nodes = data?.process_tree ?? [];
   const flatNodes = useMemo(() => flattenNodes(nodes), [nodes]);
   const query = searchValue.trim().toLowerCase();
@@ -106,16 +112,38 @@ export function TreePage() {
         <div className="hidden px-4 py-4 md:block sm:px-5">
           <ul className="space-y-2 font-mono text-sm text-secondary">
             {filteredNodes.map((node) => (
-              <TreeNode key={`${node.process.pid}-${node.process.name}`} depth={0} node={node} />
+              <TreeNode key={`${node.process.pid}-${node.process.name}`} depth={0} node={node} navigate={navigate} query={query} onAction={setActionTarget} />
             ))}
           </ul>
         </div>
         <div className="grid gap-3 px-4 py-4 md:hidden sm:px-5">
           {filteredNodes.map((node) => (
-            <TreeCard key={`${node.process.pid}-${node.process.name}`} node={node} />
+            <TreeCard key={`${node.process.pid}-${node.process.name}`} node={node} navigate={navigate} query={query} />
           ))}
         </div>
       </Card>
+      <ConfirmDialog
+        open={actionTarget !== null}
+        title={actionTarget ? `${actionTarget.action.charAt(0).toUpperCase() + actionTarget.action.slice(1)} ${actionTarget.name}?` : "Confirm action"}
+        description={
+          actionTarget
+            ? `This will ${actionTarget.action} PID ${actionTarget.pid} (${actionTarget.name}).`
+            : "Confirm this process action."
+        }
+        confirmLabel={actionTarget ? actionTarget.action.charAt(0).toUpperCase() + actionTarget.action.slice(1) : "Confirm"}
+        tone={actionTarget?.action === "kill" ? "danger" : "neutral"}
+        isPending={actionMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) setActionTarget(null);
+        }}
+        onConfirm={() => {
+          if (!actionTarget) return;
+          actionMutation.mutate(
+            { pid: actionTarget.pid, action: actionTarget.action },
+            { onSuccess: () => setActionTarget(null) },
+          );
+        }}
+      />
     </div>
   );
 }
@@ -123,23 +151,61 @@ export function TreePage() {
 interface TreeNodeProps {
   depth: number;
   node: ProcessNode;
+  navigate: ReturnType<typeof useNavigate>;
+  query?: string;
+  onAction?: (target: { pid: number; name: string; action: "kill" | "suspend" | "resume" }) => void;
 }
 
-function TreeNode({ depth, node }: TreeNodeProps) {
+function TreeNode({ depth, node, navigate, query, onAction }: TreeNodeProps) {
   return (
     <li className={depth > 0 ? "border-l border-border pl-4" : ""}>
       <div className="rounded-md border border-border bg-surface px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-foreground">{node.process.name}</span>
-          <span className="text-xs text-secondary">PID {node.process.pid}</span>
+          <span className="font-semibold text-foreground">{query ? <HighlightedText text={node.process.name} query={query} /> : node.process.name}</span>
+          <button
+            type="button"
+            className="text-xs text-secondary hover:text-accent transition-colors"
+            onClick={() => navigate(`/processes?pid=${node.process.pid}`)}
+            title={`View PID ${node.process.pid} in processes`}
+          >
+            PID {node.process.pid}
+          </button>
           {node.is_orphan ? <Badge variant="warning">orphan</Badge> : null}
           {node.children?.length ? <Badge variant="neutral">{node.children.length} child</Badge> : null}
+          {onAction && (
+            <div className="ml-auto flex gap-1">
+              <button
+                type="button"
+                className="text-xs text-secondary hover:text-accent transition-colors"
+                onClick={() => onAction({ pid: node.process.pid, name: node.process.name, action: "suspend" })}
+                title="Suspend"
+              >
+                ⏸
+              </button>
+              <button
+                type="button"
+                className="text-xs text-secondary hover:text-accent transition-colors"
+                onClick={() => onAction({ pid: node.process.pid, name: node.process.name, action: "resume" })}
+                title="Resume"
+              >
+                ▶
+              </button>
+              <button
+                type="button"
+                className="text-xs text-error hover:text-error transition-colors"
+                onClick={() => onAction({ pid: node.process.pid, name: node.process.name, action: "kill" })}
+                title="Kill"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {node.children?.length ? (
         <ul className="mt-2 space-y-2">
           {node.children.map((child) => (
-            <TreeNode key={`${child.process.pid}-${child.process.name}`} depth={depth + 1} node={child} />
+            <TreeNode key={`${child.process.pid}-${child.process.name}`} depth={depth + 1} node={child} navigate={navigate} query={query} onAction={onAction} />
           ))}
         </ul>
       ) : null}
@@ -149,15 +215,24 @@ function TreeNode({ depth, node }: TreeNodeProps) {
 
 interface TreeCardProps {
   node: ProcessNode;
+  navigate: ReturnType<typeof useNavigate>;
+  query?: string;
 }
 
-function TreeCard({ node }: TreeCardProps) {
+function TreeCard({ node, navigate, query }: TreeCardProps) {
   return (
     <Card className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-lg font-semibold tracking-tight text-foreground">{node.process.name}</div>
-          <div className="mt-1 font-mono text-sm text-secondary">PID {node.process.pid}</div>
+          <div className="text-lg font-semibold tracking-tight text-foreground">{query ? <HighlightedText text={node.process.name} query={query} /> : node.process.name}</div>
+          <button
+            type="button"
+            className="mt-1 font-mono text-sm text-secondary hover:text-accent transition-colors"
+            onClick={() => navigate(`/processes?pid=${node.process.pid}`)}
+            title={`View PID ${node.process.pid} in processes`}
+          >
+            PID {node.process.pid}
+          </button>
         </div>
         <Badge variant={node.is_orphan ? "warning" : "info"}>{node.is_orphan ? "Orphan" : `${node.children?.length ?? 0} child`}</Badge>
       </div>
@@ -230,4 +305,17 @@ function filterTree(nodes: ProcessNode[], query: string, showOnlyOrphans: boolea
     }
   }
   return output;
+}
+
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-warning/30 text-foreground rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
 }

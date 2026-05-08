@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { BellRing, ShieldAlert } from "lucide-react";
+import { useNavigate } from "react-router";
 import { SummaryCard } from "../components/shared/detail-tile";
 import { EmptyState } from "../components/shared/empty-state";
 import { FilterChip } from "../components/shared/filter-chip";
@@ -16,18 +17,24 @@ import type { AlertItem } from "../types/api";
 
 type AlertFilter = "all" | "critical" | "warning" | "info";
 
+const PAGE_SIZE = 20;
+
 export function AlertsPage() {
   const { data, isLoading } = useAlertsQuery();
   const alertActionMutation = useAlertActionMutation();
+  const navigate = useNavigate();
   const [dismissCandidate, setDismissCandidate] = useState<AlertItem | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [filter, setFilter] = useState<AlertFilter>("all");
+  const [historyPage, setHistoryPage] = useState(1);
   const debouncedSearch = useDebouncedValue(searchValue, 300);
   const activeAlerts = data?.active ?? [];
   const historyAlerts = data?.history ?? [];
 
   const filteredActive = useMemo(() => filterAlerts(activeAlerts, debouncedSearch, filter), [activeAlerts, debouncedSearch, filter]);
-  const filteredHistory = useMemo(() => filterAlerts(historyAlerts, debouncedSearch, filter).slice(0, 20), [historyAlerts, debouncedSearch, filter]);
+  const filteredHistoryAll = useMemo(() => filterAlerts(historyAlerts, debouncedSearch, filter), [historyAlerts, debouncedSearch, filter]);
+  const paginatedHistory = useMemo(() => filteredHistoryAll.slice(0, historyPage * PAGE_SIZE), [filteredHistoryAll, historyPage]);
+  const hasMoreHistory = paginatedHistory.length < filteredHistoryAll.length;
 
   if (isLoading) {
     return <PageSkeleton />;
@@ -85,7 +92,7 @@ export function AlertsPage() {
           />
         </div>
 
-        {filteredActive.length === 0 && filteredHistory.length === 0 ? (
+        {filteredActive.length === 0 && paginatedHistory.length === 0 ? (
           <EmptyState icon={ShieldAlert} title="No alerts match" description="Try a different title, PID, severity, or type filter." />
         ) : null}
 
@@ -124,21 +131,34 @@ export function AlertsPage() {
                   isLast={index === filteredActive.length - 1}
                   onDismiss={() => setDismissCandidate(alert)}
                   onSnooze={() => alertActionMutation.mutate({ type: alert.type, pid: alert.pid, action: "snooze" })}
+                  navigate={navigate}
                 />
               ))}
             </div>
           </div>
 
-          <div className={filteredHistory.length === 0 ? "hidden" : "space-y-2"}>
+          <div className={paginatedHistory.length === 0 ? "hidden" : "space-y-2"}>
             <div className="flex items-center justify-between gap-3 px-4 pt-4 sm:px-5">
-              <h2 className="section-title">History</h2>
-              <Badge variant="info">{filteredHistory.length} recent matches</Badge>
+              <div className="flex items-center gap-3">
+                <h2 className="section-title">History</h2>
+                {filteredHistoryAll.length > 0 && (
+                  <Badge variant="neutral">Total {filteredHistoryAll.length}</Badge>
+                )}
+              </div>
+              <Badge variant="info">{paginatedHistory.length} shown</Badge>
             </div>
             <div className="overflow-hidden border-y border-border bg-background">
-              {filteredHistory.map((alert, index) => (
-                <AlertRow key={`${alert.type}-${alert.pid ?? "global"}-${alert.title}`} alert={alert} isLast={index === filteredHistory.length - 1} />
+              {paginatedHistory.map((alert, index) => (
+                <AlertRow key={`${alert.type}-${alert.pid ?? "global"}-${alert.title}`} alert={alert} isLast={index === paginatedHistory.length - 1} navigate={navigate} />
               ))}
             </div>
+            {hasMoreHistory ? (
+              <div className="flex justify-center px-4 pb-4 sm:px-5">
+                <Button type="button" variant="secondary" onClick={() => setHistoryPage((p) => p + 1)}>
+                  Load more ({filteredHistoryAll.length - paginatedHistory.length} remaining)
+                </Button>
+              </div>
+            ) : null}
           </div>
         </Card>
       </div>
@@ -182,9 +202,10 @@ interface AlertRowProps {
   isLast?: boolean;
   onDismiss?: () => void;
   onSnooze?: () => void;
+  navigate?: ReturnType<typeof useNavigate>;
 }
 
-function AlertRow({ alert, isPending = false, isLast = false, onDismiss, onSnooze }: AlertRowProps) {
+function AlertRow({ alert, isPending = false, isLast = false, onDismiss, onSnooze, navigate }: AlertRowProps) {
   const variant = alert.severity === "critical" ? "error" : alert.severity === "warning" ? "warning" : "info";
 
   return (
@@ -193,7 +214,18 @@ function AlertRow({ alert, isPending = false, isLast = false, onDismiss, onSnooz
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge variant={variant}>{alert.severity}</Badge>
           <Badge variant="neutral">{alert.type}</Badge>
-          {alert.pid ? <Badge variant="neutral">PID {alert.pid}</Badge> : null}
+          {alert.pid && navigate ? (
+            <button
+              type="button"
+              className="hover:text-accent text-neutral transition-colors text-xs font-mono"
+              onClick={() => navigate(`/processes?pid=${alert.pid}`)}
+              title={`View PID ${alert.pid} in processes`}
+            >
+              PID {alert.pid}
+            </button>
+          ) : alert.pid ? (
+            <Badge variant="neutral">PID {alert.pid}</Badge>
+          ) : null}
           <div className="min-w-0 truncate text-sm font-semibold text-foreground">{alert.title}</div>
         </div>
         <p className="text-sm leading-5 text-secondary">{alert.description}</p>

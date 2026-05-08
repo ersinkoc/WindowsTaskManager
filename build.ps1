@@ -2,12 +2,12 @@
 # Produces a single optimized exe with no console window.
 #
 # Usage:
-#   .\build.ps1                      # builds wtm.exe tagged as 0.2.0
-#   .\build.ps1 -Version 0.2.0       # builds wtm.exe tagged as 0.2.0
+#   .\build.ps1                      # builds wtm.exe tagged as 0.3.0
+#   .\build.ps1 -Version 0.3.0       # builds wtm.exe tagged as 0.3.0
 #   .\build.ps1 -Out wtm-0.1.0.exe   # write to a specific file name
 
 param(
-    [string]$Version = "0.2.0",
+    [string]$Version = "0.3.0",
     [string]$Out = "wtm.exe"
 )
 

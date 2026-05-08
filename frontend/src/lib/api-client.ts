@@ -80,8 +80,13 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function apiGet<T>(path: string): Promise<T> {
-  return apiRequest<T>(path);
+export async function apiGet<T>(path: string, options?: { params?: Record<string, string> }): Promise<T> {
+  let url = path;
+  if (options?.params) {
+    const searchParams = new URLSearchParams(options.params);
+    url += `?${searchParams.toString()}`;
+  }
+  return apiRequest<T>(url);
 }
 
 async function apiPost<TBody extends object, TResponse>(path: string, body: TBody): Promise<TResponse> {
@@ -260,6 +265,18 @@ export function useTelegramConfigMutation() {
       await queryClient.invalidateQueries({ queryKey: ["telegram-config"] });
       toast.success("Telegram settings saved.");
     },
+  });
+}
+
+export function useTelegramTestMutation() {
+  return useMutation({
+    mutationFn: () => apiPostNoBody<{ ok: boolean; message?: string }>("/telegram/test"),
+  });
+}
+
+export function useAITestMutation() {
+  return useMutation({
+    mutationFn: () => apiPostNoBody<{ ok: boolean; response?: string }>("/ai/test"),
   });
 }
 

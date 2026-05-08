@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ArrowDownAZ, ArrowUpAZ, Network } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Network, X } from "lucide-react";
+import { useNavigate } from "react-router";
 import { DetailTile, SummaryCard } from "../components/shared/detail-tile";
 import { EmptyState } from "../components/shared/empty-state";
 import { FilterChip } from "../components/shared/filter-chip";
@@ -27,6 +28,7 @@ const sortOptions: Array<{ label: string; value: PortSortKey }> = [
 ];
 
 export function PortsPage() {
+  const navigate = useNavigate();
   const { data, isLoading } = useSystemSnapshotQuery();
   const [searchValue, setSearchValue] = useState("");
   const [selectedBinding, setSelectedBinding] = useState<PortBinding | null>(null);
@@ -192,7 +194,16 @@ export function PortsPage() {
                   <td className="py-2.5 pr-3 text-foreground whitespace-nowrap">{binding.local_addr}:{binding.local_port}</td>
                   <td className="py-2.5 pr-3 text-secondary whitespace-nowrap">{formatRemote(binding)}</td>
                   <td className="py-2.5 pr-3 text-secondary whitespace-nowrap">{binding.state || "OPEN"}</td>
-                  <td className="py-2.5 pr-3 font-mono text-secondary whitespace-nowrap">{binding.pid}</td>
+                  <td className="py-2.5 pr-3 font-mono whitespace-nowrap">
+                    <button
+                      type="button"
+                      className="hover:text-accent text-secondary transition-colors"
+                      onClick={() => navigate(`/processes?pid=${binding.pid}`)}
+                      title={`View PID ${binding.pid} in processes`}
+                    >
+                      {binding.pid}
+                    </button>
+                  </td>
                   <td className="py-2.5 pr-3 text-secondary">
                     <div className="truncate font-medium text-foreground">{binding.process || binding.label || "Unknown process"}</div>
                   </td>
@@ -223,30 +234,35 @@ export function PortsPage() {
       </Card>
 
       {selectedBinding ? (
-        <Card className="space-y-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="eyebrow">Inspector</div>
-              <h2 className="mt-2 truncate text-lg font-semibold tracking-tight text-foreground">
-                {selectedBinding.process || selectedBinding.label || "Unknown process"}
-              </h2>
-              <p className="mt-1 text-sm leading-6 text-secondary">
-                Local endpoint {selectedBinding.local_addr}:{selectedBinding.local_port}. Remote peer presence usually means an active connection, not just a listener.
-              </p>
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setSelectedBinding(null)} />
+          <div className="fixed right-0 top-0 z-50 flex h-full w-96 flex-col border-l border-border bg-background shadow-xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div className="min-w-0">
+                <div className="eyebrow">Inspector</div>
+                <h2 className="truncate text-lg font-semibold tracking-tight text-foreground">
+                  {selectedBinding.process || selectedBinding.label || "Unknown process"}
+                </h2>
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedBinding(null)}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 border-b border-border bg-surface px-4 py-3">
               <Badge variant={selectedBinding.state === "LISTEN" ? "success" : "info"}>{selectedBinding.state || "OPEN"}</Badge>
               <Badge variant="neutral">{selectedBinding.protocol.toUpperCase()}</Badge>
               <Badge variant="neutral">PID {selectedBinding.pid}</Badge>
             </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-3">
+                <DetailTile label="Process" value={selectedBinding.process || selectedBinding.label || "Unknown"} />
+                <DetailTile label="Local endpoint" value={`${selectedBinding.local_addr}:${selectedBinding.local_port}`} />
+                <DetailTile label="Remote peer" value={formatRemote(selectedBinding)} />
+                <DetailTile label="Usage meaning" value={portUsageMeaning(selectedBinding)} valueClassName="whitespace-normal leading-6" />
+              </div>
+            </div>
           </div>
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-            <DetailTile label="Process" value={selectedBinding.process || selectedBinding.label || "Unknown"} />
-            <DetailTile label="Local endpoint" value={`${selectedBinding.local_addr}:${selectedBinding.local_port}`} />
-            <DetailTile label="Remote peer" value={formatRemote(selectedBinding)} />
-            <DetailTile label="Usage meaning" value={portUsageMeaning(selectedBinding)} valueClassName="whitespace-normal leading-6" />
-          </div>
-        </Card>
+        </>
       ) : null}
     </div>
   );

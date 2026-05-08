@@ -40,12 +40,12 @@ type Advisor struct {
 	httpClient *http.Client
 	emitter    *event.Emitter
 
-	lastErr         string
-	lastReqAt       time.Time
-	totalReqs       uint64
-	totalCacheHits  uint64
-	totalTokens     uint64
-	promptTokens    uint64
+	lastErr          string
+	lastReqAt        time.Time
+	totalReqs        uint64
+	totalCacheHits   uint64
+	totalTokens      uint64
+	promptTokens     uint64
 	completionTokens uint64
 
 	chatMu      sync.Mutex
@@ -127,12 +127,12 @@ func (a *Advisor) Status() map[string]any {
 		"endpoint":          effectiveEndpoint(a.cfg),
 		"model":             a.cfg.AI.Model,
 		"language":          a.cfg.AI.Language,
-		"max_per_minute":     a.cfg.AI.MaxRequestsPerMinute,
-		"tokens_available":   a.rl.Available(),
+		"max_per_minute":    a.cfg.AI.MaxRequestsPerMinute,
+		"tokens_available":  a.rl.Available(),
 		"cache_size":        a.cache.Size(),
 		"total_requests":    a.totalReqs,
 		"cache_hits":        a.totalCacheHits,
-		"cache_hit_rate":     cacheHitRate,
+		"cache_hit_rate":    cacheHitRate,
 		"total_tokens":      a.totalTokens,
 		"prompt_tokens":     a.promptTokens,
 		"completion_tokens": a.completionTokens,

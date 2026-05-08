@@ -6,12 +6,20 @@ import { PageSkeleton } from "../components/shared/page-skeleton";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { useAlertsQuery, useSystemSnapshotQuery } from "../lib/api-client";
+import { useSystemHistoryQuery } from "../lib/history-client";
 import { formatBytes, formatPercent, formatRate } from "../lib/format";
+import { meterBarClassName } from "../lib/meters";
+import { Sparkline } from "../components/shared/sparkline";
 import type { PortBinding, ProcessInfo, SystemSnapshot } from "../types/api";
 
 export function DashboardPage() {
   const { data, isLoading } = useSystemSnapshotQuery();
   const { data: alertsData } = useAlertsQuery();
+  const { data: historyData } = useSystemHistoryQuery(60);
+
+  const history = historyData?.history ?? [];
+  const cpuHistory = history.map((d) => d.cpu_total);
+  const memHistory = history.map((d) => d.memory_used_percent);
 
   if (isLoading) {
     return <PageSkeleton />;
@@ -84,13 +92,14 @@ export function DashboardPage() {
       </Card>
 
       <div className="stat-grid">
-        <MetricCard icon={Cpu} label="CPU" value={formatPercent(data.cpu.total_percent)} detail={data.cpu.name || "Processor"} meter={data.cpu.total_percent} />
+        <MetricCard icon={Cpu} label="CPU" value={formatPercent(data.cpu.total_percent)} detail={data.cpu.name || "Processor"} meter={data.cpu.total_percent} sparkline={cpuHistory} />
         <MetricCard
           icon={MemoryStick}
           label="Memory"
           value={formatPercent(data.memory.used_percent)}
           detail={`${formatBytes(data.memory.used_phys)} / ${formatBytes(data.memory.total_phys)}`}
           meter={data.memory.used_percent}
+          sparkline={memHistory}
         />
         <MetricCard
           icon={Activity}
@@ -206,16 +215,17 @@ interface MetricCardProps {
   value: string;
   detail: string;
   meter?: number;
+  sparkline?: number[];
 }
 
-function MetricCard({ icon: Icon, label, value, detail, meter }: MetricCardProps) {
+function MetricCard({ icon: Icon, label, value, detail, meter, sparkline }: MetricCardProps) {
   return (
     <Card>
       <div className="flex items-start gap-3">
         <div className="mt-0.5 rounded-md border border-border bg-background px-2.5 py-2 text-accent">
           <Icon className="h-4 w-4" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="metric-label">{label}</div>
           <div className="mt-1.5 overflow-hidden text-ellipsis whitespace-nowrap text-[1.65rem] font-semibold tracking-tight text-foreground sm:text-[1.9rem]">{value}</div>
           <div className="mt-0.5 text-sm leading-6 text-secondary">{detail}</div>
@@ -225,6 +235,11 @@ function MetricCard({ icon: Icon, label, value, detail, meter }: MetricCardProps
             </div>
           ) : null}
         </div>
+        {sparkline && sparkline.length > 1 && (
+          <div className="mt-1 shrink-0">
+            <Sparkline data={sparkline} width={100} height={36} />
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -322,45 +337,4 @@ function topPortBindings(bindings: PortBinding[]) {
 
 function bindingKey(binding: PortBinding) {
   return `${binding.protocol}-${binding.pid}-${binding.local_addr}-${binding.local_port}-${binding.remote_addr}-${binding.remote_port}-${binding.state}`;
-}
-
-function meterBarClassName(value: number) {
-  const clamped = Math.max(0, Math.min(100, value));
-  if (clamped >= 100) {
-    return "meter-bar w-full";
-  }
-  if (clamped >= 90) {
-    return "meter-bar w-[90%]";
-  }
-  if (clamped >= 80) {
-    return "meter-bar w-4/5";
-  }
-  if (clamped >= 75) {
-    return "meter-bar w-3/4";
-  }
-  if (clamped >= 66) {
-    return "meter-bar w-2/3";
-  }
-  if (clamped >= 60) {
-    return "meter-bar w-3/5";
-  }
-  if (clamped >= 50) {
-    return "meter-bar w-1/2";
-  }
-  if (clamped >= 40) {
-    return "meter-bar w-2/5";
-  }
-  if (clamped >= 33) {
-    return "meter-bar w-1/3";
-  }
-  if (clamped >= 25) {
-    return "meter-bar w-1/4";
-  }
-  if (clamped >= 20) {
-    return "meter-bar w-1/5";
-  }
-  if (clamped >= 10) {
-    return "meter-bar w-[12%]";
-  }
-  return "meter-bar w-[6%]";
 }

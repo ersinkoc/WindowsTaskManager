@@ -2,7 +2,7 @@ module github.com/ersinkoc/WindowsTaskManager
 
 go 1.25.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 require (
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808

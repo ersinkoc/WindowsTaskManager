@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -87,5 +88,64 @@ func telegramDTOFromConfig(tg *config.TelegramConfig) telegramConfigDTO {
 		NotificationTypes: append([]string(nil), tg.NotificationTypes...),
 		RequireConfirm:    tg.RequireConfirm,
 		ConfirmTTLSec:     int(tg.ConfirmTTL / time.Second),
+	}
+}
+
+func (s *Server) handleTelegramTest(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	token := cfg.Telegram.BotToken
+	if token == "" {
+		writeError(w, http.StatusBadRequest, "no_token", "no bot token configured")
+		return
+	}
+
+	baseURL := strings.TrimSuffix(cfg.Telegram.APIBaseURL, "/")
+	if baseURL == "" {
+		baseURL = "https://api.telegram.org"
+	}
+
+	// Use a short timeout so the UI doesn't hang if Telegram is unreachable.
+	ctx := r.Context()
+	done := make(chan error, 1)
+	var reqErr error
+	go func() {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/bot"+token+"/getMe", nil)
+		if err != nil {
+			reqErr = err
+			done <- err
+			return
+		}
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			reqErr = err
+			done <- err
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			reqErr = fmt.Errorf("HTTP %d", resp.StatusCode)
+			done <- reqErr
+			return
+		}
+		done <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		writeError(w, http.StatusGatewayTimeout, "timeout", "Telegram API did not respond in time")
+	case err := <-done:
+		if err != nil {
+			if reqErr != nil {
+				writeError(w, http.StatusBadGateway, "connection_failed", fmt.Sprintf("failed to reach Telegram: %v", reqErr))
+			} else {
+				writeError(w, http.StatusBadGateway, "telegram_error", err.Error())
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "bot token is valid"})
 	}
 }

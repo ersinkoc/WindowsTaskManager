@@ -10,11 +10,13 @@ import { Card } from "../components/ui/card";
 import {
   useAIConfigMutation,
   useAIConfigQuery,
+  useAITestMutation,
   useAIPresetsQuery,
   useConfigQuery,
   useConfigUpdateMutation,
   useTelegramConfigMutation,
   useTelegramConfigQuery,
+  useTelegramTestMutation,
 } from "../lib/api-client";
 import type { AIConfig, TelegramConfig } from "../types/api";
 
@@ -73,8 +75,12 @@ export function SettingsPage() {
   const aiMutation = useAIConfigMutation();
   const telegramMutation = useTelegramConfigMutation();
   const configMutation = useConfigUpdateMutation();
-
+  const telegramTestMutation = useTelegramTestMutation();
+  const aiTestMutation = useAITestMutation();
   const [selectedPreset, setSelectedPreset] = useState("");
+  const [aiDirty, setAiDirty] = useState(false);
+  const [telegramDirty, setTelegramDirty] = useState(false);
+  const [runtimeDirty, setRuntimeDirty] = useState(false);
   const [aiForm, setAIForm] = useState<AIConfig>({
     enabled: false,
     provider: "anthropic",
@@ -200,6 +206,9 @@ export function SettingsPage() {
             <Badge variant={aiForm.enabled ? "success" : "neutral"}>{aiForm.enabled ? "AI on" : "AI off"}</Badge>
             <Badge variant={telegramForm.enabled ? "info" : "neutral"}>{telegramForm.enabled ? "Telegram on" : "Telegram off"}</Badge>
             <Badge variant="info">{runtimeForm.theme} theme</Badge>
+            {(aiDirty || telegramDirty || runtimeDirty) && (
+              <Badge variant="warning">● unsaved</Badge>
+            )}
           </>
         }
       />
@@ -226,13 +235,17 @@ export function SettingsPage() {
                   if (!preset) {
                     return;
                   }
-                  setAIForm((current) => ({
-                    ...current,
-                    provider: preset.provider,
-                    endpoint: preset.endpoint || current.endpoint,
-                    model: preset.model || current.model,
-                  }));
+                  setAIForm((current) => {
+                    setAiDirty(true);
+                    return {
+                      ...current,
+                      provider: preset.provider,
+                      endpoint: preset.endpoint || current.endpoint,
+                      model: preset.model || current.model,
+                    };
+                  });
                   setAIHeadersText(headersToText(preset.extra_headers));
+                  setAiDirty(true);
                 }}
               >
                 <option value="">Choose a starter preset</option>
@@ -244,16 +257,25 @@ export function SettingsPage() {
               </select>
             </Field>
             <Field label="Provider">
-              <select aria-label="AI provider" className={controlClassName} value={aiForm.provider} onChange={(event) => setAIForm((current) => ({ ...current, provider: event.target.value }))}>
+              <select aria-label="AI provider" className={controlClassName} value={aiForm.provider} onChange={(event) => {
+                  setAiDirty(true);
+                  setAIForm((current) => ({ ...current, provider: event.target.value }));
+                }}>
                 <option value="anthropic">Anthropic</option>
                 <option value="openai">OpenAI compatible</option>
               </select>
             </Field>
             <Field label="Model">
-              <input aria-label="AI model" className={controlClassName} value={aiForm.model} onChange={(event) => setAIForm((current) => ({ ...current, model: event.target.value }))} />
+              <input aria-label="AI model" className={controlClassName} value={aiForm.model} onChange={(event) => {
+                  setAiDirty(true);
+                  setAIForm((current) => ({ ...current, model: event.target.value }));
+                }} />
             </Field>
             <Field label="Endpoint">
-              <input aria-label="AI endpoint" className={controlClassName} value={aiForm.endpoint} onChange={(event) => setAIForm((current) => ({ ...current, endpoint: event.target.value }))} />
+              <input aria-label="AI endpoint" className={controlClassName} value={aiForm.endpoint} onChange={(event) => {
+                  setAiDirty(true);
+                  setAIForm((current) => ({ ...current, endpoint: event.target.value }));
+                }} />
             </Field>
           </div>
         </Subsection>
@@ -267,35 +289,43 @@ export function SettingsPage() {
                   placeholder="Leave blank to keep current key"
                   className={controlClassName}
                   value={aiForm.api_key}
-                  onChange={(event) => setAIForm((current) => ({ ...current, api_key: event.target.value }))}
+                  onChange={(event) => { setAiDirty(true); setAIForm((current) => ({ ...current, api_key: event.target.value })); }}
                 />
                 <div className="mt-2 text-xs text-secondary">{aiKeyState}</div>
               </div>
             </Field>
             <Field label="Language">
-              <input aria-label="AI language" className={controlClassName} value={aiForm.language} onChange={(event) => setAIForm((current) => ({ ...current, language: event.target.value }))} />
+              <input aria-label="AI language" className={controlClassName} value={aiForm.language} onChange={(event) => { setAiDirty(true); setAIForm((current) => ({ ...current, language: event.target.value })); }} />
             </Field>
             <Field label="Max tokens">
-              <input aria-label="AI max tokens" type="number" min={64} className={controlClassName} value={aiForm.max_tokens} onChange={(event) => setAIForm((current) => ({ ...current, max_tokens: Number(event.target.value) || 64 }))} />
+              <input aria-label="AI max tokens" type="number" min={64} className={controlClassName} value={aiForm.max_tokens} onChange={(event) => { setAiDirty(true); setAIForm((current) => ({ ...current, max_tokens: Number(event.target.value) || 64 })); }} />
             </Field>
             <Field label="Requests per minute">
-              <input aria-label="AI requests per minute" type="number" min={1} className={controlClassName} value={aiForm.max_requests_per_minute} onChange={(event) => setAIForm((current) => ({ ...current, max_requests_per_minute: Number(event.target.value) || 1 }))} />
+              <input aria-label="AI requests per minute" type="number" min={1} className={controlClassName} value={aiForm.max_requests_per_minute} onChange={(event) => { setAiDirty(true); setAIForm((current) => ({ ...current, max_requests_per_minute: Number(event.target.value) || 1 })); }} />
             </Field>
           </div>
         </Subsection>
         <Subsection title="Context">
           <Field label="Extra headers">
-            <textarea aria-label="AI extra headers" className={textareaClassName} placeholder="HTTP-Referer: http://localhost" value={aiHeadersText} onChange={(event) => setAIHeadersText(event.target.value)} />
+            <textarea aria-label="AI extra headers" className={textareaClassName} placeholder="HTTP-Referer: http://localhost" value={aiHeadersText} onChange={(event) => { setAiDirty(true); setAIHeadersText(event.target.value); }} />
           </Field>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            <Toggle label="Enable AI" checked={aiForm.enabled} onChange={(checked) => setAIForm((current) => ({ ...current, enabled: checked }))} />
-            <Toggle label="Include process tree" checked={aiForm.include_process_tree} onChange={(checked) => setAIForm((current) => ({ ...current, include_process_tree: checked }))} />
-            <Toggle label="Include port map" checked={aiForm.include_port_map} onChange={(checked) => setAIForm((current) => ({ ...current, include_port_map: checked }))} />
+            <Toggle label="Enable AI" checked={aiForm.enabled} onChange={(checked) => { setAiDirty(true); setAIForm((current) => ({ ...current, enabled: checked })); }} />
+            <Toggle label="Include process tree" checked={aiForm.include_process_tree} onChange={(checked) => { setAiDirty(true); setAIForm((current) => ({ ...current, include_process_tree: checked })); }} />
+            <Toggle label="Include port map" checked={aiForm.include_port_map} onChange={(checked) => { setAiDirty(true); setAIForm((current) => ({ ...current, include_port_map: checked })); }} />
           </div>
         </Subsection>
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" disabled={aiMutation.isPending} onClick={() => aiMutation.mutate({ ...aiForm, extra_headers: textToHeaders(aiHeadersText) })}>
+          <Button type="button" disabled={aiMutation.isPending} onClick={() => aiMutation.mutate({ ...aiForm, extra_headers: textToHeaders(aiHeadersText) }, { onSuccess: () => setAiDirty(false) })}>
             Save AI settings
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={aiTestMutation.isPending || !aiForm.api_key || !aiForm.enabled}
+            onClick={() => aiTestMutation.mutate()}
+          >
+            {aiTestMutation.isPending ? "Testing..." : aiTestMutation.isSuccess ? "Connection OK!" : "Test AI"}
           </Button>
           <span className="text-sm text-secondary">Chat stays on the AI page; provider setup lives here.</span>
         </div>
@@ -308,16 +338,16 @@ export function SettingsPage() {
             <div className="grid gap-3">
               <Field label="Bot token">
                 <div>
-                  <input aria-label="Telegram bot token" type="password" placeholder="Leave blank to keep current token" className={controlClassName} value={telegramForm.bot_token} onChange={(event) => setTelegramForm((current) => ({ ...current, bot_token: event.target.value }))} />
+                  <input aria-label="Telegram bot token" type="password" placeholder="Leave blank to keep current token" className={controlClassName} value={telegramForm.bot_token} onChange={(event) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, bot_token: event.target.value })); }} />
                   <div className="mt-2 text-xs text-secondary">{telegramTokenState}</div>
                 </div>
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Allowed chat IDs">
-                  <input aria-label="Telegram allowed chat IDs" className={controlClassName} value={telegramChatIDsText} onChange={(event) => setTelegramChatIDsText(event.target.value)} />
+                  <input aria-label="Telegram allowed chat IDs" className={controlClassName} value={telegramChatIDsText} onChange={(event) => { setTelegramDirty(true); setTelegramChatIDsText(event.target.value); }} />
                 </Field>
                 <Field label="API base URL">
-                  <input aria-label="Telegram API base URL" className={controlClassName} value={telegramForm.api_base_url} onChange={(event) => setTelegramForm((current) => ({ ...current, api_base_url: event.target.value }))} />
+                  <input aria-label="Telegram API base URL" className={controlClassName} value={telegramForm.api_base_url} onChange={(event) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, api_base_url: event.target.value })); }} />
                 </Field>
               </div>
             </div>
@@ -325,16 +355,16 @@ export function SettingsPage() {
           <Subsection title="Notification policy">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Notification mode">
-                <select aria-label="Telegram notification mode" className={controlClassName} value={telegramForm.notification_mode} onChange={(event) => setTelegramForm((current) => ({ ...current, notification_mode: event.target.value }))}>
+                <select aria-label="Telegram notification mode" className={controlClassName} value={telegramForm.notification_mode} onChange={(event) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, notification_mode: event.target.value })); }}>
                   <option value="high_value">Only high-value critical alerts</option>
                   <option value="all_critical">All critical alerts</option>
                 </select>
               </Field>
               <Field label="Poll timeout (sec)">
-                <input aria-label="Telegram poll timeout" type="number" min={5} className={controlClassName} value={telegramForm.poll_timeout_sec} onChange={(event) => setTelegramForm((current) => ({ ...current, poll_timeout_sec: Number(event.target.value) || 5 }))} />
+                <input aria-label="Telegram poll timeout" type="number" min={5} className={controlClassName} value={telegramForm.poll_timeout_sec} onChange={(event) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, poll_timeout_sec: Number(event.target.value) || 5 })); }} />
               </Field>
               <Field label="Confirm TTL (sec)">
-                <input aria-label="Telegram confirm TTL" type="number" min={15} className={controlClassName} value={telegramForm.confirm_ttl_sec} onChange={(event) => setTelegramForm((current) => ({ ...current, confirm_ttl_sec: Number(event.target.value) || 15 }))} />
+                <input aria-label="Telegram confirm TTL" type="number" min={15} className={controlClassName} value={telegramForm.confirm_ttl_sec} onChange={(event) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, confirm_ttl_sec: Number(event.target.value) || 15 })); }} />
               </Field>
             </div>
             <Field label="High-value alert types">
@@ -348,12 +378,12 @@ export function SettingsPage() {
                         type="checkbox"
                         checked={checked}
                         onChange={(event) =>
-                          setTelegramForm((current) => ({
+                          { setTelegramDirty(true); setTelegramForm((current) => ({
                             ...current,
                             notification_types: event.target.checked
                               ? [...current.notification_types, option.value]
                               : current.notification_types.filter((item) => item !== option.value),
-                          }))
+                          })); }
                         }
                       />
                       <span>{option.label}</span>
@@ -363,9 +393,9 @@ export function SettingsPage() {
               </div>
             </Field>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <Toggle label="Enable Telegram" checked={telegramForm.enabled} onChange={(checked) => setTelegramForm((current) => ({ ...current, enabled: checked }))} />
-              <Toggle label="Notify on critical" checked={telegramForm.notify_on_critical} onChange={(checked) => setTelegramForm((current) => ({ ...current, notify_on_critical: checked }))} />
-              <Toggle label="Require confirm" checked={telegramForm.require_confirm} onChange={(checked) => setTelegramForm((current) => ({ ...current, require_confirm: checked }))} />
+              <Toggle label="Enable Telegram" checked={telegramForm.enabled} onChange={(checked) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, enabled: checked })); }} />
+              <Toggle label="Notify on critical" checked={telegramForm.notify_on_critical} onChange={(checked) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, notify_on_critical: checked })); }} />
+              <Toggle label="Require confirm" checked={telegramForm.require_confirm} onChange={(checked) => { setTelegramDirty(true); setTelegramForm((current) => ({ ...current, require_confirm: checked })); }} />
             </div>
           </Subsection>
           <div className="soft-panel text-sm leading-6 text-secondary">
@@ -384,10 +414,18 @@ export function SettingsPage() {
                   .map((value) => Number(value))
                   .filter((value) => Number.isFinite(value)),
                 notification_types: Array.from(new Set(telegramForm.notification_types)),
-              })
+              }, { onSuccess: () => setTelegramDirty(false) })
             }
           >
             Save Telegram settings
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={telegramTestMutation.isPending || !telegramConfig?.bot_token}
+            onClick={() => telegramTestMutation.mutate()}
+          >
+            {telegramTestMutation.isPending ? "Testing..." : telegramTestMutation.isSuccess ? "Token valid!" : "Test bot"}
           </Button>
         </Card>
 
@@ -396,39 +434,39 @@ export function SettingsPage() {
           <Subsection title="Collector cadence">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Collector interval (ms)">
-                <input aria-label="Collector interval" type="number" min={100} className={controlClassName} value={runtimeForm.intervalMS} onChange={(event) => setRuntimeForm((current) => ({ ...current, intervalMS: Number(event.target.value) || 100 }))} />
+                <input aria-label="Collector interval" type="number" min={100} className={controlClassName} value={runtimeForm.intervalMS} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, intervalMS: Number(event.target.value) || 100 })); }} />
               </Field>
               <Field label="Process tree interval (ms)">
-                <input aria-label="Process tree interval" type="number" min={100} className={controlClassName} value={runtimeForm.processTreeIntervalMS} onChange={(event) => setRuntimeForm((current) => ({ ...current, processTreeIntervalMS: Number(event.target.value) || 100 }))} />
+                <input aria-label="Process tree interval" type="number" min={100} className={controlClassName} value={runtimeForm.processTreeIntervalMS} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, processTreeIntervalMS: Number(event.target.value) || 100 })); }} />
               </Field>
               <Field label="Port scan interval (ms)">
-                <input aria-label="Port scan interval" type="number" min={250} className={controlClassName} value={runtimeForm.portScanIntervalMS} onChange={(event) => setRuntimeForm((current) => ({ ...current, portScanIntervalMS: Number(event.target.value) || 250 }))} />
+                <input aria-label="Port scan interval" type="number" min={250} className={controlClassName} value={runtimeForm.portScanIntervalMS} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, portScanIntervalMS: Number(event.target.value) || 250 })); }} />
               </Field>
               <Field label="GPU interval (ms)">
-                <input aria-label="GPU interval" type="number" min={250} className={controlClassName} value={runtimeForm.gpuIntervalMS} onChange={(event) => setRuntimeForm((current) => ({ ...current, gpuIntervalMS: Number(event.target.value) || 250 }))} />
+                <input aria-label="GPU interval" type="number" min={250} className={controlClassName} value={runtimeForm.gpuIntervalMS} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, gpuIntervalMS: Number(event.target.value) || 250 })); }} />
               </Field>
               <Field label="History duration (sec)">
-                <input aria-label="History duration" type="number" min={60} className={controlClassName} value={runtimeForm.historyDurationSec} onChange={(event) => setRuntimeForm((current) => ({ ...current, historyDurationSec: Number(event.target.value) || 60 }))} />
+                <input aria-label="History duration" type="number" min={60} className={controlClassName} value={runtimeForm.historyDurationSec} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, historyDurationSec: Number(event.target.value) || 60 })); }} />
               </Field>
               <Field label="Max processes">
-                <input aria-label="Max processes" type="number" min={100} className={controlClassName} value={runtimeForm.maxProcesses} onChange={(event) => setRuntimeForm((current) => ({ ...current, maxProcesses: Number(event.target.value) || 100 }))} />
+                <input aria-label="Max processes" type="number" min={100} className={controlClassName} value={runtimeForm.maxProcesses} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, maxProcesses: Number(event.target.value) || 100 })); }} />
               </Field>
             </div>
           </Subsection>
           <Subsection title="Dashboard defaults">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Refresh rate (ms)">
-                <input aria-label="Refresh rate" type="number" min={100} className={controlClassName} value={runtimeForm.refreshRateMS} onChange={(event) => setRuntimeForm((current) => ({ ...current, refreshRateMS: Number(event.target.value) || 100 }))} />
+                <input aria-label="Refresh rate" type="number" min={100} className={controlClassName} value={runtimeForm.refreshRateMS} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, refreshRateMS: Number(event.target.value) || 100 })); }} />
               </Field>
               <Field label="Theme">
-                <select aria-label="Default theme" className={controlClassName} value={runtimeForm.theme} onChange={(event) => setRuntimeForm((current) => ({ ...current, theme: event.target.value }))}>
+                <select aria-label="Default theme" className={controlClassName} value={runtimeForm.theme} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, theme: event.target.value })); }}>
                   <option value="system">System</option>
                   <option value="light">Light</option>
                   <option value="dark">Dark</option>
                 </select>
               </Field>
               <Field label="Default process sort">
-                <select aria-label="Default process sort" className={controlClassName} value={runtimeForm.defaultSort} onChange={(event) => setRuntimeForm((current) => ({ ...current, defaultSort: event.target.value }))}>
+                <select aria-label="Default process sort" className={controlClassName} value={runtimeForm.defaultSort} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, defaultSort: event.target.value })); }}>
                   <option value="cpu">CPU</option>
                   <option value="memory">Memory</option>
                   <option value="name">Name</option>
@@ -437,22 +475,22 @@ export function SettingsPage() {
                 </select>
               </Field>
               <Field label="Default sort order">
-                <select aria-label="Default sort order" className={controlClassName} value={runtimeForm.defaultSortOrder} onChange={(event) => setRuntimeForm((current) => ({ ...current, defaultSortOrder: event.target.value }))}>
+                <select aria-label="Default sort order" className={controlClassName} value={runtimeForm.defaultSortOrder} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, defaultSortOrder: event.target.value })); }}>
                   <option value="desc">Descending</option>
                   <option value="asc">Ascending</option>
                 </select>
               </Field>
               <Field label="Sparkline points">
-                <input aria-label="Sparkline points" type="number" min={10} className={controlClassName} value={runtimeForm.sparklinePoints} onChange={(event) => setRuntimeForm((current) => ({ ...current, sparklinePoints: Number(event.target.value) || 10 }))} />
+                <input aria-label="Sparkline points" type="number" min={10} className={controlClassName} value={runtimeForm.sparklinePoints} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, sparklinePoints: Number(event.target.value) || 10 })); }} />
               </Field>
               <Field label="Process table page size">
-                <input aria-label="Process table page size" type="number" min={10} className={controlClassName} value={runtimeForm.processTablePageSize} onChange={(event) => setRuntimeForm((current) => ({ ...current, processTablePageSize: Number(event.target.value) || 10 }))} />
+                <input aria-label="Process table page size" type="number" min={10} className={controlClassName} value={runtimeForm.processTablePageSize} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, processTablePageSize: Number(event.target.value) || 10 })); }} />
               </Field>
               <Field label="Balloon rate limit (sec)">
-                <input aria-label="Balloon rate limit" type="number" min={1} className={controlClassName} value={runtimeForm.balloonRateLimitSec} onChange={(event) => setRuntimeForm((current) => ({ ...current, balloonRateLimitSec: Number(event.target.value) || 1 }))} />
+                <input aria-label="Balloon rate limit" type="number" min={1} className={controlClassName} value={runtimeForm.balloonRateLimitSec} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, balloonRateLimitSec: Number(event.target.value) || 1 })); }} />
               </Field>
               <Field label="Balloon min severity">
-                <select aria-label="Balloon min severity" className={controlClassName} value={runtimeForm.balloonMinSeverity} onChange={(event) => setRuntimeForm((current) => ({ ...current, balloonMinSeverity: event.target.value }))}>
+                <select aria-label="Balloon min severity" className={controlClassName} value={runtimeForm.balloonMinSeverity} onChange={(event) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, balloonMinSeverity: event.target.value })); }}>
                   <option value="info">Info</option>
                   <option value="warning">Warning</option>
                   <option value="critical">Critical</option>
@@ -461,9 +499,9 @@ export function SettingsPage() {
             </div>
           </Subsection>
           <div className="grid gap-2 sm:grid-cols-2">
-            <Toggle label="Open browser on start" checked={runtimeForm.openBrowser} onChange={(checked) => setRuntimeForm((current) => ({ ...current, openBrowser: checked }))} />
-            <Toggle label="Confirm kill system" checked={runtimeForm.confirmKillSystem} onChange={(checked) => setRuntimeForm((current) => ({ ...current, confirmKillSystem: checked }))} />
-            <Toggle label="Tray balloon alerts" checked={runtimeForm.trayBalloon} onChange={(checked) => setRuntimeForm((current) => ({ ...current, trayBalloon: checked }))} />
+            <Toggle label="Open browser on start" checked={runtimeForm.openBrowser} onChange={(checked) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, openBrowser: checked })); }} />
+            <Toggle label="Confirm kill system" checked={runtimeForm.confirmKillSystem} onChange={(checked) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, confirmKillSystem: checked })); }} />
+            <Toggle label="Tray balloon alerts" checked={runtimeForm.trayBalloon} onChange={(checked) => { setRuntimeDirty(true); setRuntimeForm((current) => ({ ...current, trayBalloon: checked })); }} />
           </div>
           <Button
             type="button"
@@ -493,7 +531,7 @@ export function SettingsPage() {
                   process_table_page_size: runtimeForm.processTablePageSize,
                   refresh_rate_ms: runtimeForm.refreshRateMS,
                 },
-              })
+              }, { onSuccess: () => setRuntimeDirty(false) })
             }
           >
             Save runtime settings

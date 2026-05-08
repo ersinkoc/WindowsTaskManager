@@ -245,8 +245,8 @@ func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
 		data = filtered
 	}
 	resp := map[string]any{
-		"models":  data,
-		"count":   len(data),
+		"models":   data,
+		"count":    len(data),
 		"source":   modelsDevURL,
 		"updated":  snap.loadedAt.Format(time.RFC3339),
 		"endpoint": s.effectiveAIEndpoint(),

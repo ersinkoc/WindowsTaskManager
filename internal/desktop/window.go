@@ -50,10 +50,3 @@ func (w *Window) Run() {
 	}
 	w.wv.Run()
 }
-
-func (w *Window) Destroy() {
-	if w == nil || w.wv == nil {
-		return
-	}
-	w.wv.Destroy()
-}

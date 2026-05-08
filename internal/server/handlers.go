@@ -81,8 +81,10 @@ func (s *Server) routes() {
 	s.router.POST("/api/v1/ai/config", s.handleAIConfigUpdate)
 	s.router.GET("/api/v1/ai/presets", s.handleAIPresets)
 	s.router.GET("/api/v1/ai/models", s.handleAIModels)
+	s.router.POST("/api/v1/ai/test", s.handleAITest)
 	s.router.GET("/api/v1/telegram/config", s.handleTelegramConfigGet)
 	s.router.POST("/api/v1/telegram/config", s.handleTelegramConfigUpdate)
+	s.router.POST("/api/v1/telegram/test", s.handleTelegramTest)
 
 	// User-defined automation rules.
 	s.router.GET("/api/v1/rules", s.handleRulesGet)

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Bot, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { Bot, Eye, EyeOff, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
@@ -11,7 +11,8 @@ import { queueRuleDraftPrefill } from "./rules-page";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { useAIAnalyzeMutation, useAIChatMutation, useAIExecuteMutation, useAIStatusQuery } from "../lib/api-client";
+import { useAIAnalyzeMutation, useAIChatMutation, useAIExecuteMutation, useAIStatusQuery, useSystemSnapshotQuery, useAlertsQuery } from "../lib/api-client";
+import { formatPercent } from "../lib/format";
 import type { AISuggestion } from "../types/api";
 
 const chatSchema = z.object({
@@ -29,11 +30,15 @@ type ChatFormValues = z.infer<typeof chatSchema>;
 export function AIPage() {
   const navigate = useNavigate();
   const { data, isLoading } = useAIStatusQuery();
+  const { data: systemData } = useSystemSnapshotQuery();
+  const { data: alertsData } = useAlertsQuery();
   const chatMutation = useAIChatMutation();
   const analyzeMutation = useAIAnalyzeMutation();
   const executeMutation = useAIExecuteMutation();
   const [transcript, setTranscript] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const MAX_TURNS = 20;
   const form = useForm<ChatFormValues>({
     resolver: zodResolver(chatSchema),
     defaultValues: { message: "" },
@@ -41,10 +46,17 @@ export function AIPage() {
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
-    setTranscript((current) => [...current, { role: "user", text: values.message }]);
+    const newEntry = { role: "user" as const, text: values.message };
+    setTranscript((current) => {
+      const next = [...current, newEntry];
+      return next.length > MAX_TURNS ? next.slice(-MAX_TURNS) : next;
+    });
     form.reset();
     const result = await chatMutation.mutateAsync(values.message);
-    setTranscript((current) => [...current, { role: "assistant", text: result.answer }]);
+    setTranscript((current) => {
+      const withResponse = [...current, { role: "assistant" as const, text: result.answer }];
+      return withResponse.length > MAX_TURNS ? withResponse.slice(-MAX_TURNS) : withResponse;
+    });
     setSuggestions(result.actions ?? []);
   });
 
@@ -129,7 +141,14 @@ export function AIPage() {
                   <h2 className="section-title">Conversation</h2>
                   <p className="mt-1 text-sm text-secondary">Ask for prioritization, anomaly summaries, or the safest next step.</p>
                 </div>
-                <Badge variant={transcript.length > 0 ? "info" : "neutral"}>{transcript.length} turns</Badge>
+                <div className="flex items-center gap-2">
+                  {transcript.length > 0 && (
+                    <Button type="button" size="sm" variant="ghost" onClick={() => { setTranscript([]); setSuggestions([]); }}>
+                      Clear
+                    </Button>
+                  )}
+                  <Badge variant={transcript.length > 0 ? "info" : "neutral"}>{transcript.length} turns</Badge>
+                </div>
               </div>
               {transcript.length === 0 ? (
                 <EmptyState icon={Bot} title="No conversation yet" description="Ask about noisy processes, spikes, or the safest next step." />
@@ -181,14 +200,56 @@ export function AIPage() {
                 disabled={analyzeMutation.isPending || !form.formState.isValid || !data.enabled}
                 onClick={form.handleSubmit(async (values) => {
                   const result = await analyzeMutation.mutateAsync(values.message);
-                  setTranscript((current) => [...current, { role: "assistant", text: result.answer }]);
+                  setTranscript((current) => {
+                    const withResponse = [...current, { role: "assistant" as const, text: result.answer }];
+                    return withResponse.length > MAX_TURNS ? withResponse.slice(-MAX_TURNS) : withResponse;
+                  });
                   setSuggestions(result.actions ?? []);
                 })}
               >
                 {analyzeMutation.isPending ? "Analyzing..." : "Analyze snapshot"}
               </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowPreview((v) => !v)}>
+                {showPreview ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+                {showPreview ? "Hide" : "Show"} data preview
+              </Button>
               {!data.enabled ? <Badge variant="warning">Enable AI in the backend config to chat.</Badge> : null}
             </div>
+            {showPreview && systemData && (
+              <div className="mt-3 rounded-lg border border-border bg-background px-4 py-3">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-secondary">Data sent to AI</div>
+                <div className="grid gap-2 text-xs">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-secondary">Processes</span>
+                    <span className="font-mono text-foreground">{systemData.processes.length}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-secondary">CPU</span>
+                    <span className="font-mono text-foreground">{formatPercent(systemData.cpu.total_percent)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-secondary">Memory</span>
+                    <span className="font-mono text-foreground">{formatPercent(systemData.memory.used_percent)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-secondary">Top process</span>
+                    <span className="font-mono text-foreground">{systemData.processes.sort((a, b) => b.cpu_percent - a.cpu_percent)[0]?.name ?? "--"}</span>
+                  </div>
+                  {alertsData?.active.length ? (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-secondary">Active alerts</span>
+                      <span className="font-mono text-foreground">{alertsData.active.length}</span>
+                    </div>
+                  ) : null}
+                  {systemData.port_bindings?.length ? (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-secondary">Port bindings</span>
+                      <span className="font-mono text-foreground">{systemData.port_bindings.length}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
           </form>
         </Card>
 

@@ -5,10 +5,15 @@ import { PageSkeleton } from "../components/shared/page-skeleton";
 import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/shared/empty-state";
 import { useSystemSnapshotQuery } from "../lib/api-client";
+import { useSystemHistoryQuery } from "../lib/history-client";
 import { formatBytes, formatPercent, formatRate } from "../lib/format";
+import { Sparkline } from "../components/shared/sparkline";
 
 export function OverviewPage() {
   const { data, isLoading } = useSystemSnapshotQuery();
+  const { data: historyData } = useSystemHistoryQuery(120);
+
+  const cpuHistory = (historyData?.history ?? []).map((d) => d.cpu_total);
 
   if (isLoading) return <PageSkeleton />;
   if (!data) return <EmptyState icon={Cpu} title="Waiting for live metrics" description="WTM collector is still warming up." />;
@@ -31,7 +36,10 @@ export function OverviewPage() {
               {data.cpu.name} &middot; {data.cpu.num_logical} logical cores
             </p>
           </div>
-          <Badge variant="neutral">{data.cpu.total_percent.toFixed(1)}% total</Badge>
+          <div className="flex items-center gap-3">
+            {cpuHistory.length > 1 && <Sparkline data={cpuHistory} width={100} height={30} />}
+            <Badge variant="neutral">{data.cpu.total_percent.toFixed(1)}% total</Badge>
+          </div>
         </div>
         <div className="grid gap-3 p-4 sm:px-5 sm:py-4">
           <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(11rem, 1fr))" }}>

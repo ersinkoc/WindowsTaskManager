@@ -11,6 +11,35 @@ Semantic Versioning.
 
 - Placeholder for upcoming changes.
 
+## [0.3.0] - 2026-05-08
+
+### Added
+
+- Sparkline charts on Dashboard and Overview pages showing CPU and memory history trends.
+- AI data preview toggle — see what system data is sent to the AI before submitting.
+- AI conversation history management with Clear button and 20-turn cap.
+- Load more pagination with aggregate summary on alerts history page.
+- Clickable PIDs in processes table — clicking filters the process list to that PID.
+- Keyboard navigation (j/k arrows) in processes table rows.
+- Test Telegram and Test AI buttons in settings to validate credentials.
+- Version and build info with links in About page.
+- Undo duplicate meterBarClassName to shared utility.
+- Kill/Suspend/Resume inline actions in process tree page.
+- Alert count badge on sidebar Alerts nav item.
+- Search match highlighting in process tree.
+
+### Changed
+
+- Sidebar is now always visible on desktop — no more disappearing on resize.
+- Go toolchain updated to 1.26.3 to fix net/http vulnerabilities (CVE-2026-4971, CVE-2026-4918).
+
+### Fixed
+
+- Removed unreachable Window.Destroy deadcode in desktop package.
+- Fixed ai_config.go result.Text undefined error (should use result.Answer).
+- Fixed processes-page unused navigate import.
+- Fixed tree-page TreeNode/TreeCard missing navigate prop.
+
 ## [0.2.0] - 2026-04-25
 
 ### Added
