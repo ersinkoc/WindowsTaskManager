@@ -11,6 +11,24 @@ Semantic Versioning.
 
 - Placeholder for upcoming changes.
 
+## [0.3.1] - 2026-05-10
+
+### Added
+
+- Ports page redesigned with Dev Ports, Known Ports (34 registered ports with app names), and Node.js server instance panels.
+- Main content area now has independent scroll — sidebar stays fixed while pages scroll.
+- Ports page query optimization: eliminated O(n²) repeated `.filter()` calls with single-pass `Map` lookup.
+- Ports page debounced search (300ms) to avoid filter runs on every keystroke.
+
+### Changed
+
+- Removed dead minimize/maximize/close buttons from topbar — Windows native title bar already handles window management, the buttons were decorative noise.
+- `/network` page removed — redundant since `/overview` already shows per-interface CPU and network sparklines.
+
+### Fixed
+
+- Fixed ports-page Badge `className` prop — Badge component doesn't accept className, replaced with inline span styling.
+
 ## [0.3.0] - 2026-05-08
 
 ### Added
