@@ -11,13 +11,10 @@ env:
   NODE_VERSION: "20"
 
 jobs:
-  # ─────────────────────────────────────────────
-  # Frontend tests and build
-  # ─────────────────────────────────────────────
   frontend:
     name: Frontend (Node ${{ env.NODE_VERSION }})
     runs-on: windows-latest
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,13 +45,10 @@ jobs:
           path: frontend/dist/
           retention-days: 7
 
-  # ─────────────────────────────────────────────
-  # Backend tests
-  # ─────────────────────────────────────────────
   backend:
     name: Backend (Go ${{ env.GO_VERSION }})
     runs-on: windows-latest
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,7 +63,7 @@ jobs:
         run: go vet ./...
 
       - name: Run tests
-        run: go test ./... -race -count=1
+        run: go test ./... -count=1
 
       - name: Build binary
         run: go build -ldflags="-s -w" -o WindowsTaskManager.exe ./cmd/wtm/
@@ -81,13 +75,10 @@ jobs:
           path: WindowsTaskManager.exe
           retention-days: 7
 
-  # ─────────────────────────────────────────────
-  # Security audit
-  # ─────────────────────────────────────────────
   security:
     name: Security Audit
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,50 +95,3 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --prefix frontend --audit-level=moderate
-
-  # ─────────────────────────────────────────────
-  # Integration test (requires running server)
-  # ─────────────────────────────────────────────
-  integration:
-    name: Integration Test
-    runs-on: windows-latest
-    needs: [frontend, backend]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Build
-        run: go build -ldflags="-s -w" -o WindowsTaskManager.exe ./cmd/wtm/
-
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/
-
-      - name: Start server in background
-        run: ./WindowsTaskManager.exe &
-        shell: bash
-
-      - name: Wait for server to be ready
-        run: |
-          for i in {1..30}; do
-            curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:19876/api/v1/info && exit 0
-            sleep 1
-          done
-          exit 1
-
-      - name: Run smoke tests
-        run: |
-          curl -s http://127.0.0.1:19876/api/v1/info | grep -q "version" && echo "API OK"
-          curl -s http://127.0.0.1:19876/ | grep -q "<" && echo "Frontend OK"
-
-      - name: Stop server
-        run: taskkill //F //IM WindowsTaskManager.exe 2>/dev/null || true

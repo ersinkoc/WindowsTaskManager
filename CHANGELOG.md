@@ -5,26 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] - 2026-05-17
+## [0.4.0] - 2026-05-17
 
 ### Added
-- **React ErrorBoundary** for graceful error handling across all pages
-- **Loading Skeleton Components** — TableSkeleton, ChartSkeleton, DetailSkeleton for improved perceived performance
-- **Web Vitals Monitoring** — LCP, CLS, FCP, INP tracking via web-vitals
-- **Global Error Handler** — window.onerror and unhandledrejection handlers
-- **PWA Support** — manifest.json and SVG favicon for installable app
 - **GitHub Actions CI/CD** — Automated testing, building, and security audit
 - **ESLint Configuration** — TypeScript-aware linting with recommended rules
-- **Mobile Responsiveness** — Sidebar hidden on mobile (lg breakpoint)
+- **PWA Support** — manifest.json and SVG favicon for installable app
+- **Web Vitals Monitoring** — LCP, CLS, FCP, INP tracking via web-vitals
+- **Global Error Handler** — window.onerror and unhandledrejection handlers
+- **React ErrorBoundary** — Graceful error handling across all pages
+- **Loading Skeleton Components** — TableSkeleton, ChartSkeleton, DetailSkeleton
 - **Test Infrastructure** — TestWrapper with QueryClient, MemoryRouter, ThemeProvider
+- **README.md** — Comprehensive installation and usage guide
+- **API.md** — Complete API documentation for all endpoints
 
 ### Fixed
 - **postcss XSS vulnerability** — Updated to 8.5.14 (GHSA-qx2v-qp2m-jg93)
 - **Test suite** — All 21 tests now passing with proper context providers
+- **Mobile Responsiveness** — Sidebar hidden on mobile (lg breakpoint)
 
 ### Changed
-- **package.json** — Added typecheck and lint scripts
-- **README.md** — Comprehensive documentation with installation and usage guide
+- **package.json** — Added typecheck, lint scripts
+- **overview-page** — Improved loading states with ChartSkeleton, DetailSkeleton
+
+## [0.3.1] - 2026-05-17
+
+### Added
+- **Ports Page Redesign** — New protocol filtering (All/TCP/UDP)
+- **Dead Topbar Buttons Removed** — Cleaner UI
+- **Scroll Fix** — Better scroll behavior on long lists
 
 ## [0.3.0] - 2026-05-10
 

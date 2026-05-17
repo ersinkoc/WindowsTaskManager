@@ -2,7 +2,7 @@
 
 WTM is a local-first Windows monitoring and control console shipped as a single executable. It collects live machine telemetry, exposes a localhost REST API, serves an embedded web UI, detects suspicious or unhealthy process behavior, and can optionally layer AI and Telegram workflows on top.
 
-Current release: [`v0.3.0`](https://github.com/ersinkoc/WindowsTaskManager/releases/tag/v0.3.0)
+Current release: [`v0.4.0`](https://github.com/ersinkoc/WindowsTaskManager/releases/tag/v0.4.0)
 
 Project history lives in [`CHANGELOG.md`](CHANGELOG.md). Release notes and shipping steps live in [`RELEASING.md`](RELEASING.md).
 
