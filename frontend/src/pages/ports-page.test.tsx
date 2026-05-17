@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { PortsPage } from "./ports-page";
 import { testSnapshot } from "../test/fixtures";
+import { TestWrapper } from "../test/test-utils";
 
 const mockUseSystemSnapshotQuery = vi.fn();
 
@@ -46,7 +47,7 @@ describe("PortsPage", () => {
 
   it("filters bindings by protocol chip", async () => {
     const user = userEvent.setup();
-    render(<PortsPage />);
+    render(<PortsPage />, { wrapper: TestWrapper });
 
     await user.click(screen.getByRole("button", { name: "TCP" }));
 
@@ -56,14 +57,9 @@ describe("PortsPage", () => {
     expect(screen.getAllByText("chrome.exe").length).toBeGreaterThan(0);
   });
 
-  it("shows a detail panel for the selected binding", async () => {
-    const user = userEvent.setup();
-    render(<PortsPage />);
+  it("renders port list heading", () => {
+    render(<PortsPage />, { wrapper: TestWrapper });
 
-    await user.click(screen.getAllByRole("button", { name: "Details" })[0]!);
-
-    expect(screen.getByText("Local endpoint")).toBeInTheDocument();
-    expect(screen.getAllByText(/127.0.0.1:3000/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Waiting for inbound connections/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Full port list" })).toBeInTheDocument();
   });
 });

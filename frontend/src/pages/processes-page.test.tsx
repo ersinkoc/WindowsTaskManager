@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { ProcessesPage } from "./processes-page";
 import { testSnapshot } from "../test/fixtures";
+import { TestWrapper } from "../test/test-utils";
 
 const mockUseSystemSnapshotQuery = vi.fn();
 const mockUseInfoQuery = vi.fn();
@@ -39,7 +40,7 @@ describe("ProcessesPage", () => {
 
   it("filters processes by search text", async () => {
     const user = userEvent.setup();
-    render(<ProcessesPage />);
+    render(<ProcessesPage />, { wrapper: TestWrapper });
 
     await user.type(screen.getByLabelText("Search processes by name or PID"), "chrome");
 
@@ -51,7 +52,7 @@ describe("ProcessesPage", () => {
 
   it("opens a confirmation dialog before killing a process", async () => {
     const user = userEvent.setup();
-    render(<ProcessesPage />);
+    render(<ProcessesPage />, { wrapper: TestWrapper });
 
     await user.click(screen.getAllByRole("button", { name: "Kill" })[0]!);
 
@@ -61,7 +62,7 @@ describe("ProcessesPage", () => {
 
   it("sorts rows when the header is clicked", async () => {
     const user = userEvent.setup();
-    render(<ProcessesPage />);
+    render(<ProcessesPage />, { wrapper: TestWrapper });
 
     await user.click(screen.getByRole("button", { name: "Sort by Name" }));
 
@@ -75,7 +76,7 @@ describe("ProcessesPage", () => {
   });
 
   it("prefers live port bindings over stale process connection counts", () => {
-    render(<ProcessesPage />);
+    render(<ProcessesPage />, { wrapper: TestWrapper });
 
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
   });

@@ -1,7 +1,7 @@
 import { Cpu, Network } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { PageHeader } from "../components/shared/page-header";
-import { PageSkeleton } from "../components/shared/page-skeleton";
+import { ChartSkeleton, DetailSkeleton } from "../components/shared/page-skeleton";
 import { Badge } from "../components/ui/badge";
 import { EmptyState } from "../components/shared/empty-state";
 import { useSystemSnapshotQuery } from "../lib/api-client";
@@ -13,9 +13,18 @@ export function OverviewPage() {
   const { data, isLoading } = useSystemSnapshotQuery();
   const { data: historyData } = useSystemHistoryQuery(120);
 
-  const cpuHistory = (historyData?.history ?? []).map((d) => d.cpu_total);
+  const cpuHistory = (historyData?.history ?? []).map((d) => d.cpu?.total_percent ?? 0);
+  const netDownHistory = (historyData?.history ?? []).map((d) => d.network?.total_down_bps ?? 0);
+  const netUpHistory = (historyData?.history ?? []).map((d) => d.network?.total_up_bps ?? 0);
 
-  if (isLoading) return <PageSkeleton />;
+  if (isLoading) return (
+    <div className="space-y-6">
+      <PageHeader title="Overview" description="Per-core CPU breakdown, per-interface network traffic, and memory details at a glance." eyebrow="System metrics" icon={Cpu} />
+      <ChartSkeleton />
+      <DetailSkeleton />
+      <ChartSkeleton />
+    </div>
+  );
   if (!data) return <EmptyState icon={Cpu} title="Waiting for live metrics" description="WTM collector is still warming up." />;
 
   return (
@@ -90,7 +99,21 @@ export function OverviewPage() {
               ↓{formatRate(data.network.total_down_bps)} &nbsp; ↑{formatRate(data.network.total_up_bps)}
             </p>
           </div>
-          <Badge variant="neutral">{data.network.interfaces.filter((i) => i.status === "up").length} up</Badge>
+          <div className="flex items-center gap-3">
+            {netDownHistory.length > 1 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[0.65rem] text-secondary">↓</span>
+                <Sparkline data={netDownHistory} width={80} height={22} />
+              </div>
+            )}
+            {netUpHistory.length > 1 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[0.65rem] text-secondary">↑</span>
+                <Sparkline data={netUpHistory} width={80} height={22} />
+              </div>
+            )}
+            <Badge variant="neutral">{data.network.interfaces.filter((i) => i.status === "up").length} up</Badge>
+          </div>
         </div>
         <div className="grid gap-3 p-4 sm:px-5 sm:py-4">
           {data.network.interfaces.length === 0 && (

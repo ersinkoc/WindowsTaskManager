@@ -18,8 +18,8 @@ export function DashboardPage() {
   const { data: historyData } = useSystemHistoryQuery(60);
 
   const history = historyData?.history ?? [];
-  const cpuHistory = history.map((d) => d.cpu_total);
-  const memHistory = history.map((d) => d.memory_used_percent);
+  const cpuHistory = history.map((d) => d.cpu?.total_percent ?? 0);
+  const memHistory = history.map((d) => d.memory?.used_percent ?? 0);
 
   if (isLoading) {
     return <PageSkeleton />;

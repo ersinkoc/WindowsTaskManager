@@ -5,6 +5,7 @@ import { routeImports } from "./route-map";
 import { AppShell } from "../components/layout/app-shell";
 import { PageSkeleton } from "../components/shared/page-skeleton";
 import { RouteErrorState } from "../components/shared/route-error-state";
+import { ErrorBoundary } from "../components/shared/error-boundary";
 
 const DashboardPage = lazy(async () => routeImports["/"]().then((mod) => ({ default: mod.DashboardPage })));
 const OverviewPage = lazy(async () => routeImports["/overview"]().then((mod) => ({ default: mod.OverviewPage })));
@@ -19,7 +20,11 @@ const SettingsPage = lazy(async () => routeImports["/settings"]().then((mod) => 
 const AboutPage = lazy(async () => routeImports["/about"]().then((mod) => ({ default: mod.AboutPage })));
 
 function withSuspense(node: ReactNode) {
-  return <Suspense fallback={<PageSkeleton />}>{node}</Suspense>;
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageSkeleton />}>{node}</Suspense>
+    </ErrorBoundary>
+  );
 }
 
 export const appRouter = createBrowserRouter([

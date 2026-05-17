@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { SettingsPage } from "./settings-page";
+import { TestWrapper } from "../test/test-utils";
 
 const mockUseAIConfigQuery = vi.fn();
 const mockUseAIPresetsQuery = vi.fn();
@@ -10,6 +11,8 @@ const mockUseConfigQuery = vi.fn();
 const mockUseAIConfigMutation = vi.fn();
 const mockUseTelegramConfigMutation = vi.fn();
 const mockUseConfigUpdateMutation = vi.fn();
+const mockUseTelegramTestMutation = vi.fn();
+const mockUseAITestMutation = vi.fn();
 
 vi.mock("../lib/api-client", () => ({
   useAIConfigQuery: () => mockUseAIConfigQuery(),
@@ -19,6 +22,8 @@ vi.mock("../lib/api-client", () => ({
   useAIConfigMutation: () => mockUseAIConfigMutation(),
   useTelegramConfigMutation: () => mockUseTelegramConfigMutation(),
   useConfigUpdateMutation: () => mockUseConfigUpdateMutation(),
+  useTelegramTestMutation: () => mockUseTelegramTestMutation(),
+  useAITestMutation: () => mockUseAITestMutation(),
 }));
 
 describe("SettingsPage", () => {
@@ -71,10 +76,12 @@ describe("SettingsPage", () => {
     mockUseAIConfigMutation.mockReturnValue({ isPending: false, mutate: vi.fn() });
     mockUseTelegramConfigMutation.mockReturnValue({ isPending: false, mutate: vi.fn() });
     mockUseConfigUpdateMutation.mockReturnValue({ isPending: false, mutate: vi.fn() });
+    mockUseTelegramTestMutation.mockReturnValue({ isPending: false, mutate: vi.fn() });
+    mockUseAITestMutation.mockReturnValue({ isPending: false, mutate: vi.fn() });
   });
 
   it("renders the missing settings controls again", () => {
-    render(<SettingsPage />);
+    render(<SettingsPage />, { wrapper: TestWrapper });
 
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByLabelText("AI provider")).toHaveValue("openai");

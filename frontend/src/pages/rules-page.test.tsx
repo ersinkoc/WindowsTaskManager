@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { RulesPage } from "./rules-page";
+import { TestWrapper } from "../test/test-utils";
 
 const mockUseRulesQuery = vi.fn();
 const mockUseRulesUpdateMutation = vi.fn();
@@ -44,7 +45,7 @@ describe("RulesPage", () => {
       isLoading: false,
     });
 
-    render(<RulesPage />);
+    render(<RulesPage />, { wrapper: TestWrapper });
 
     expect(screen.getByRole("heading", { name: "Add rule" })).toBeInTheDocument();
     expect(screen.getByLabelText("Rule name")).toBeInTheDocument();
@@ -59,7 +60,7 @@ describe("RulesPage", () => {
       mutate,
     });
 
-    render(<RulesPage />);
+    render(<RulesPage />, { wrapper: TestWrapper });
 
     await user.type(screen.getByLabelText("Rule name"), "Memory leak guard");
     await user.type(screen.getByLabelText("Rule match"), "claude.exe");

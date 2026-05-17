@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { vi } from "vitest";
 import { DashboardPage } from "./dashboard-page";
 import { testAlerts, testSnapshot } from "../test/fixtures";
+import { TestWrapper } from "../test/test-utils";
 
 const mockUseSystemSnapshotQuery = vi.fn();
 const mockUseAlertsQuery = vi.fn();
@@ -37,7 +38,7 @@ describe("DashboardPage", () => {
   });
 
   it("shows the highest CPU processes first in the top processes table", () => {
-    render(<DashboardPage />);
+    render(<DashboardPage />, { wrapper: TestWrapper });
 
     const table = screen.getByRole("table");
     const rows = within(table).getAllByRole("row");

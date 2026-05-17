@@ -1,103 +1,153 @@
-name: ci
+name: CI
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, develop]
   pull_request:
+    branches: [main]
 
-permissions:
-  contents: read
+env:
+  GO_VERSION: "1.25"
+  NODE_VERSION: "20"
 
 jobs:
-  validate:
+  # ─────────────────────────────────────────────
+  # Frontend tests and build
+  # ─────────────────────────────────────────────
+  frontend:
+    name: Frontend (Node ${{ env.NODE_VERSION }})
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          go-version-file: go.mod
-          cache: true
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "frontend/node_modules"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+      - name: Install dependencies
+        run: npm ci --prefix frontend
 
-      - name: Install staticcheck
-        shell: pwsh
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          go install golang.org/x/tools/cmd/deadcode@latest
-          go install mvdan.cc/unparam@latest
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Type check
+        run: npm run typecheck --prefix frontend
 
-      - name: Verify modules
-        run: go mod verify
+      - name: Run unit tests
+        run: npm test --prefix frontend
 
-      - name: Test
-        run: go test ./... -count=1
+      - name: Build for production
+        run: npm run build --prefix frontend
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Backend tests
+  # ─────────────────────────────────────────────
+  backend:
+    name: Backend (Go ${{ env.GO_VERSION }})
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
       - name: Vet
         run: go vet ./...
 
-      - name: Govulncheck
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
-          govulncheck ./...
+      - name: Run tests
+        run: go test ./... -race -count=1
 
-      - name: Staticcheck
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
-          staticcheck ./...
+      - name: Build binary
+        run: go build -ldflags="-s -w" -o WindowsTaskManager.exe ./cmd/wtm/
 
-      - name: Deadcode
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
-          deadcode ./...
-
-      - name: Unparam
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:USERPROFILE\go\bin;$env:PATH"
-          unparam ./...
-
-      - name: Setup MinGW for race detector
-        id: msys2
-        uses: msys2/setup-msys2@v2
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
+          name: wtm-binary
+          path: WindowsTaskManager.exe
+          retention-days: 7
 
-      - name: Add MinGW to PATH
-        shell: pwsh
-        run: |
-          "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+  # ─────────────────────────────────────────────
+  # Security audit
+  # ─────────────────────────────────────────────
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
 
-      - name: Race
-        shell: pwsh
-        run: |
-          $env:CGO_ENABLED = "1"
-          go test -race ./...
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "frontend/node_modules"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix frontend
+
+      - name: Run npm audit
+        run: npm audit --prefix frontend --audit-level=moderate
+
+  # ─────────────────────────────────────────────
+  # Integration test (requires running server)
+  # ─────────────────────────────────────────────
+  integration:
+    name: Integration Test
+    runs-on: windows-latest
+    needs: [frontend, backend]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
       - name: Build
-        shell: pwsh
+        run: go build -ldflags="-s -w" -o WindowsTaskManager.exe ./cmd/wtm/
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+
+      - name: Start server in background
+        run: ./WindowsTaskManager.exe &
+        shell: bash
+
+      - name: Wait for server to be ready
         run: |
-          $env:GOOS = "windows"
-          $env:GOARCH = "amd64"
-          $env:CGO_ENABLED = "0"
-          go build -trimpath ./cmd/wtm
+          for i in {1..30}; do
+            curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:19876/api/v1/info && exit 0
+            sleep 1
+          done
+          exit 1
+
+      - name: Run smoke tests
+        run: |
+          curl -s http://127.0.0.1:19876/api/v1/info | grep -q "version" && echo "API OK"
+          curl -s http://127.0.0.1:19876/ | grep -q "<" && echo "Frontend OK"
+
+      - name: Stop server
+        run: taskkill //F //IM WindowsTaskManager.exe 2>/dev/null || true

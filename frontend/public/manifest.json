@@ -1,0 +1,35 @@
+{
+  "name": "Windows Task Manager (WTM)",
+  "short_name": "WTM",
+  "description": "Local operator console for Windows system monitoring, process triage, rules, alerts, ports, and guarded actions.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "developer tools"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/",
+      "description": "View system overview"
+    },
+    {
+      "name": "Processes",
+      "url": "/processes",
+      "description": "View running processes"
+    },
+    {
+      "name": "AI Advisor",
+      "url": "/ai",
+      "description": "Get AI-powered insights"
+    }
+  ]
+}

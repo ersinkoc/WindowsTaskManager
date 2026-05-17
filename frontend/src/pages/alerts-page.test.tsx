@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { AlertsPage } from "./alerts-page";
 import { testAlerts } from "../test/fixtures";
+import { TestWrapper } from "../test/test-utils";
 
 const mockUseAlertsQuery = vi.fn();
 const mockUseAlertActionMutation = vi.fn();
@@ -26,7 +27,7 @@ describe("AlertsPage", () => {
 
   it("filters alerts by severity chip", async () => {
     const user = userEvent.setup();
-    render(<AlertsPage />);
+    render(<AlertsPage />, { wrapper: TestWrapper });
 
     await user.click(screen.getByRole("button", { name: "Critical" }));
 
@@ -36,7 +37,7 @@ describe("AlertsPage", () => {
 
   it("filters alerts by search text", async () => {
     const user = userEvent.setup();
-    render(<AlertsPage />);
+    render(<AlertsPage />, { wrapper: TestWrapper });
 
     await user.type(screen.getByLabelText("Search alerts by title, type, severity, or PID"), "memory");
 
