@@ -3,8 +3,13 @@ import { apiGet } from "./api-client";
 
 export interface HistoryDataPoint {
   time: string;
-  cpu_total: number;
-  memory_used_percent: number;
+  cpu: { total_percent: number };
+  memory: { used_percent: number };
+  network: {
+    total_down_bps: number;
+    total_up_bps: number;
+    interfaces: Array<{ name: string; in_bps: number; out_bps: number }>;
+  };
 }
 
 export interface SystemHistoryResponse {

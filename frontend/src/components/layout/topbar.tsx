@@ -41,8 +41,12 @@ export function Topbar() {
   return (
     <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0">
-        <div className="eyebrow">WTM command surface</div>
-        <h1 className="mt-0.5 text-[1.05rem] font-semibold tracking-tight text-foreground">{pageTitle}</h1>
+        <div className="flex items-center gap-1">
+          <div className="flex flex-col">
+            <div className="eyebrow">WTM command surface</div>
+            <h1 className="mt-0.5 text-[1.05rem] font-semibold tracking-tight text-foreground">{pageTitle}</h1>
+          </div>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
         <Badge variant="neutral">{cpuText}</Badge>
