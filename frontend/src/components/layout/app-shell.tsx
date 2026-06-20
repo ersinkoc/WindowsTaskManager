@@ -25,11 +25,7 @@ export function AppShell() {
       >
         <SidebarNav collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />
       </aside>
-      <main
-        id="main-content"
-        className="min-h-screen overflow-y-auto transition-all duration-150 lg:pl-60"
-        tabIndex={-1}
-      >
+      <main id="main-content" className="h-screen overflow-y-auto transition-all duration-150 lg:pl-60" tabIndex={-1}>
         <header className="sticky top-0 z-[100] border-b border-border bg-background/88 backdrop-blur-md">
           <div className="page-padding flex min-h-14 items-center gap-3 py-2">
             <Topbar />
