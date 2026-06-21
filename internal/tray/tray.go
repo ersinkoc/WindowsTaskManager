@@ -102,17 +102,48 @@ const className = "WTM_TrayClass"
 var classNamePtr *uint16
 var classOnce sync.Once
 
-func (t *Tray) create() error {
-	var initErr error
-	classOnce.Do(func() {
-		classNamePtr, initErr = windows.UTF16PtrFromString(className)
-	})
-	if initErr != nil {
+// The following package-level vars are indirection points so tests can
+// inject failure paths without touching the real Win32 calls. In production
+// they hold the real implementations; tests reassign them and restore on
+// teardown.
+var (
+	classInit = func() error {
+		var initErr error
+		classOnce.Do(func() {
+			classNamePtr, initErr = windows.UTF16PtrFromString(className)
+		})
 		return initErr
+	}
+	getModuleHandleEx = func(handle uint32, moduleName *uint16, module *windows.Handle) error {
+		return windows.GetModuleHandleEx(handle, moduleName, module)
+	}
+	createWindowEx = func(exStyle uint32, className, windowName *uint16, style uint32,
+		x, y, width, height int32, parent uintptr, menu, instance uintptr,
+		param unsafe.Pointer) (uintptr, error) {
+		return winapi.CreateWindowEx(exStyle, className, windowName, style,
+			x, y, width, height, parent, menu, instance, param)
+	}
+	shellNotifyIcon = func(message uint32, nid *winapi.NOTIFYICONDATAW) error {
+		return winapi.ShellNotifyIcon(message, nid)
+	}
+	createPopupMenu = func() uintptr {
+		return winapi.CreatePopupMenu()
+	}
+	registerClassEx = func(c *winapi.WNDCLASSEXW) (uint16, error) {
+		return winapi.RegisterClassEx(c)
+	}
+	trackPopupMenu = func(menu uintptr, flags uint32, x, y int32, hwnd uintptr) uintptr {
+		return winapi.TrackPopupMenu(menu, flags, x, y, hwnd)
+	}
+)
+
+func (t *Tray) create() error {
+	if err := classInit(); err != nil {
+		return err
 	}
 
 	var hInstance windows.Handle
-	if err := windows.GetModuleHandleEx(0, nil, &hInstance); err != nil {
+	if err := getModuleHandleEx(0, nil, &hInstance); err != nil {
 		return err
 	}
 
@@ -124,11 +155,11 @@ func (t *Tray) create() error {
 		Cursor:    winapi.LoadCursor(winapi.IDC_ARROW),
 		ClassName: classNamePtr,
 	}
-	if _, err := winapi.RegisterClassEx(&wc); err != nil {
+	if _, err := registerClassEx(&wc); err != nil {
 		return err
 	}
 
-	hwnd, err := winapi.CreateWindowEx(
+	hwnd, err := createWindowEx(
 		0, classNamePtr, classNamePtr, 0,
 		0, 0, 0, 0,
 		winapi.HWND_MESSAGE,
@@ -147,7 +178,7 @@ func (t *Tray) create() error {
 		Icon:            winapi.LoadIcon(winapi.IDI_APPLICATION),
 	}
 	winapi.SetTipString(t.nid.Tip[:], "Windows Task Manager")
-	if err := winapi.ShellNotifyIcon(winapi.NIM_ADD, &t.nid); err != nil {
+	if err := shellNotifyIcon(winapi.NIM_ADD, &t.nid); err != nil {
 		return fmt.Errorf("tray: NIM_ADD: %w", err)
 	}
 	return nil
@@ -191,7 +222,7 @@ func (t *Tray) wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 }
 
 func (t *Tray) showMenu() {
-	menu := winapi.CreatePopupMenu()
+	menu := createPopupMenu()
 	if menu == 0 {
 		return
 	}
@@ -203,7 +234,7 @@ func (t *Tray) showMenu() {
 
 	pt, _ := winapi.GetCursorPos()
 	winapi.SetForegroundWindow(t.hwnd)
-	cmd := winapi.TrackPopupMenu(
+	cmd := trackPopupMenu(
 		menu,
 		winapi.TPM_LEFTALIGN|winapi.TPM_RIGHTBUTTON|winapi.TPM_RETURNCMD,
 		pt.X, pt.Y, t.hwnd,

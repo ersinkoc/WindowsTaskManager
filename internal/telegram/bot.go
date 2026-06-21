@@ -851,11 +851,14 @@ func normalizeConfirmCode(args []string) string {
 
 func newConfirmCode() (string, error) {
 	var raw [5]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	if _, err := randReadFunc(raw[:]); err != nil {
 		return "", err
 	}
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:]), nil
 }
+
+// randReadFunc is a hook for tests to simulate rand.Read failures.
+var randReadFunc = rand.Read
 
 func describeProcess(name string, pid uint32) string {
 	if name != "" {

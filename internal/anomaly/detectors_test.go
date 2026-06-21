@@ -176,3 +176,46 @@ func repeatBindings(pid uint32, proc string, n int) []metrics.PortBinding {
 	}
 	return out
 }
+
+// TestMemoryLeakDetectorLowRSquaredSkip exercises the
+// `if r2 < cfg.MinRSquared { continue }` branch in memory_leak.go. To force
+// low R² we plant 8 samples whose working set alternates between two values
+// (100MB / 800MB) instead of trending linearly — the resulting regression
+// line is poor, so r2 < MinRSquared regardless of growth rate.
+func TestMemoryLeakDetectorLowRSquaredSkip(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Anomaly.MemoryLeak.Enabled = true
+	cfg.Anomaly.MemoryLeak.Window = 10 * time.Minute
+	cfg.Anomaly.MemoryLeak.MinGrowthRate = "1MB/min"
+	cfg.Anomaly.MemoryLeak.MinRSquared = 0.9 // require strong linearity
+	cfg.Anomaly.MemoryLeak.MemoryThreshold = "1MB"
+	st := storage.NewStore(120, 64)
+	now := time.Now()
+	for i := 7; i >= 0; i-- {
+		t0 := now.Add(time.Duration(-i) * time.Minute)
+		// Alternate between two very different values so the line fit is poor.
+		var ws uint64
+		if i%2 == 0 {
+			ws = 100 << 20
+		} else {
+			ws = 800 << 20
+		}
+		st.SetLatest(&metrics.SystemSnapshot{
+			Timestamp: t0,
+			Processes: []metrics.ProcessInfo{{PID: 9, Name: "noisy.exe", WorkingSet: ws}},
+		})
+	}
+	d := NewMemoryLeakDetector()
+	ctx := &AnalysisContext{
+		Now: now, Cfg: cfg, Store: st,
+		Snapshot: &metrics.SystemSnapshot{
+			Timestamp: now,
+			Processes: []metrics.ProcessInfo{{PID: 9, Name: "noisy.exe", WorkingSet: 500 << 20}},
+		},
+		Alerts: NewAlertStore(8),
+	}
+	d.Analyze(ctx)
+	if a := findActiveAlert(ctx.Alerts, d.Name(), 9); a != nil {
+		t.Fatal("low R² data should not raise an alert (r2 < MinRSquared branch)")
+	}
+}

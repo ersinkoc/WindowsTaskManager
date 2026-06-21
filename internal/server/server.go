@@ -274,9 +274,14 @@ func samePort(originPort, requestPort string) bool {
 	return originPort == requestPort
 }
 
+// secureRandomRead is the source of cryptographic randomness used by
+// newCSRFSafeToken. It is a var (not the direct rand.Read call) so tests
+// can substitute a deterministic failure to exercise the error branch.
+var secureRandomRead = rand.Read
+
 func newCSRFSafeToken() (string, error) {
 	var buf [32]byte
-	if _, err := rand.Read(buf[:]); err != nil {
+	if _, err := secureRandomRead(buf[:]); err != nil {
 		return "", fmt.Errorf("generate csrf token: %w", err)
 	}
 	return hex.EncodeToString(buf[:]), nil

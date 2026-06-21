@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -63,6 +64,10 @@ type chatTurn struct {
 }
 
 const maxProviderResponseBytes = 2 << 20
+
+// marshalProviderBody wraps json.Marshal so tests can inject failures that
+// exercise the marshal-error branch in callAnthropic / callOpenAI.
+var marshalProviderBody = json.Marshal
 
 // NewAdvisor builds a new advisor. alertSource is a closure that returns
 // the current active alerts for the prompt context.

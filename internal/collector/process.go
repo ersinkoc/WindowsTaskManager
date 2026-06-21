@@ -47,18 +47,34 @@ func NewProcessCollector(maxResults int) *ProcessCollector {
 	}
 }
 
+// Function variables wrapping the Win32 calls so tests can stub the
+// failure paths without invoking real OS APIs.
+var (
+	createToolhelp32Snapshot  = winapi.CreateToolhelp32Snapshot
+	process32First            = winapi.Process32First
+	process32Next             = winapi.Process32Next
+	closeHandleSafe           = winapi.CloseHandleSafe
+	openProcessHandle         = winapi.OpenProcessHandle
+	getProcessMemoryInfo      = winapi.GetProcessMemoryInfo
+	getProcessIoCounters      = winapi.GetProcessIoCounters
+	getProcessTimes           = winapi.GetProcessTimes
+	queryFullProcessImageName = winapi.QueryFullProcessImageName
+	isProcessCritical         = winapi.IsProcessCritical
+	getPriorityClass          = winapi.GetPriorityClass
+)
+
 // Collect returns the current process list. It limits results to maxResults
 // after sorting by working set descending so we always retain the heaviest
 // processes when there are too many.
 func (pc *ProcessCollector) Collect() []metrics.ProcessInfo {
-	snap, err := winapi.CreateToolhelp32Snapshot(winapi.TH32CS_SNAPPROCESS, 0)
+	snap, err := createToolhelp32Snapshot(winapi.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil
 	}
-	defer winapi.CloseHandleSafe(snap)
+	defer closeHandleSafe(snap)
 
 	var entry winapi.PROCESSENTRY32W
-	if err := winapi.Process32First(snap, &entry); err != nil {
+	if err := process32First(snap, &entry); err != nil {
 		return nil
 	}
 
@@ -69,7 +85,7 @@ func (pc *ProcessCollector) Collect() []metrics.ProcessInfo {
 	for {
 		info := pc.collectOne(entry, now, live)
 		results = append(results, info)
-		if err := winapi.Process32Next(snap, &entry); err != nil {
+		if err := process32Next(snap, &entry); err != nil {
 			break
 		}
 	}
@@ -104,22 +120,22 @@ func (pc *ProcessCollector) collectOne(entry winapi.PROCESSENTRY32W, now time.Ti
 		return info
 	}
 
-	h, err := winapi.OpenProcessHandle(accessLimited, entry.ProcessID)
+	h, err := openProcessHandle(accessLimited, entry.ProcessID)
 	if err != nil {
 		// Many system processes deny query — return what we have.
 		live[entry.ProcessID] = procPrev{sampleTime: now}
 		return info
 	}
-	defer winapi.CloseHandleSafe(h)
+	defer closeHandleSafe(h)
 
-	if mem, err := winapi.GetProcessMemoryInfo(h); err == nil && mem != nil {
+	if mem, err := getProcessMemoryInfo(h); err == nil && mem != nil {
 		info.WorkingSet = uint64(mem.WorkingSetSize)
 		info.PrivateBytes = uint64(mem.PrivateUsage)
 		info.PageFaults = mem.PageFaultCount
 	}
 
 	var currReadBytes, currWriteBytes, currReadOps, currWriteOps uint64
-	if io, err := winapi.GetProcessIoCounters(h); err == nil && io != nil {
+	if io, err := getProcessIoCounters(h); err == nil && io != nil {
 		currReadBytes = io.ReadTransferCount
 		currWriteBytes = io.WriteTransferCount
 		currReadOps = io.ReadOperationCount
@@ -135,7 +151,7 @@ func (pc *ProcessCollector) collectOne(entry winapi.PROCESSENTRY32W, now time.Ti
 		}
 	}
 
-	create, _, kernel, user, terr := winapi.GetProcessTimes(h)
+	create, _, kernel, user, terr := getProcessTimes(h)
 	if terr == nil {
 		info.CreateTime = winapi.FileTimeToUnix(create)
 		kt := kernel.Ticks()
@@ -151,6 +167,10 @@ func (pc *ProcessCollector) collectOne(entry winapi.PROCESSENTRY32W, now time.Ti
 				deltaTicks := float64((kt - prev.kernelTicks) + (ut - prev.userTicks))
 				cpuSeconds := deltaTicks / 1e7 // 100ns -> seconds
 				cpuPercent := (cpuSeconds / elapsed) * 100.0 / float64(pc.numLogical)
+				// Clamp to [0, 100]. The lower bound is defensive; with
+				// uint64 ticks negative deltas wrap to a huge positive
+				// value, so the > 100 branch catches them. The < 0 branch
+				// is preserved as a safety net.
 				if cpuPercent < 0 {
 					cpuPercent = 0
 				}
@@ -173,7 +193,7 @@ func (pc *ProcessCollector) collectOne(entry winapi.PROCESSENTRY32W, now time.Ti
 		live[entry.ProcessID] = procPrev{sampleTime: now}
 	}
 
-	if path, err := winapi.QueryFullProcessImageName(h); err == nil {
+	if path, err := queryFullProcessImageName(h); err == nil {
 		info.ExePath = path
 		// Prefer the basename from path if PROCESSENTRY32 had a truncated name.
 		if base := filepath.Base(path); base != "" && !strings.EqualFold(base, info.Name) {
@@ -181,11 +201,11 @@ func (pc *ProcessCollector) collectOne(entry winapi.PROCESSENTRY32W, now time.Ti
 		}
 	}
 
-	if crit, err := winapi.IsProcessCritical(h); err == nil && crit {
+	if crit, err := isProcessCritical(h); err == nil && crit {
 		info.IsCritical = true
 	}
 
-	if pri, err := winapi.GetPriorityClass(h); err == nil {
+	if pri, err := getPriorityClass(h); err == nil {
 		info.PriorityClass = pri
 	}
 

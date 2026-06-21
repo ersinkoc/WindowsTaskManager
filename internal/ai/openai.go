@@ -58,7 +58,7 @@ func (a *Advisor) callOpenAI(ctx context.Context, cfg *config.Config, prompt str
 			{Role: "user", Content: prompt},
 		},
 	}
-	buf, err := json.Marshal(reqBody)
+	buf, err := marshalProviderBody(reqBody)
 	if err != nil {
 		return "", nil, err
 	}

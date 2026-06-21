@@ -20,6 +20,11 @@ func AcquireSingleInstance(name string) (func(), error) {
 
 	h, err := windows.CreateMutex(nil, false, namePtr)
 	if err != nil {
+		// The golang.org/x/sys/windows.CreateMutex wrapper uses the
+		// directive [failretval == 0 || e1 == ERROR_ALREADY_EXISTS],
+		// so a returned non-nil error covers both "handle is 0" AND
+		// "the named mutex already exists". We only treat the latter
+		// as ErrAlreadyRunning; other errors are propagated verbatim.
 		if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 			if h != 0 {
 				_ = windows.CloseHandle(h)
@@ -27,10 +32,6 @@ func AcquireSingleInstance(name string) (func(), error) {
 			return nil, ErrAlreadyRunning
 		}
 		return nil, err
-	}
-	if errors.Is(windows.GetLastError(), windows.ERROR_ALREADY_EXISTS) {
-		_ = windows.CloseHandle(h)
-		return nil, ErrAlreadyRunning
 	}
 
 	return func() {

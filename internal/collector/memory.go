@@ -10,10 +10,13 @@ import (
 // MemoryCollector samples physical and virtual memory state.
 type MemoryCollector struct{}
 
+// Function variable wrapping the Win32 call so tests can stub the failure path.
+var globalMemoryStatusEx = winapi.GlobalMemoryStatusEx
+
 func NewMemoryCollector() *MemoryCollector { return &MemoryCollector{} }
 
 func (m *MemoryCollector) Collect() metrics.MemoryMetrics {
-	ms, err := winapi.GlobalMemoryStatusEx()
+	ms, err := globalMemoryStatusEx()
 	if err != nil || ms == nil {
 		return metrics.MemoryMetrics{}
 	}

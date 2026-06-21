@@ -23,10 +23,23 @@ type DiskCollector struct {
 	perf *diskPerfCounters
 }
 
+// Function variables wrapping the Win32/PDH calls so tests can stub the
+// failure paths without invoking real OS APIs.
+var (
+	diskGetLogicalDriveStrings = winapi.GetLogicalDriveStrings
+	diskGetDriveType           = winapi.GetDriveType
+	diskGetDiskFreeSpaceEx     = winapi.GetDiskFreeSpaceEx
+	diskGetVolumeInformation   = winapi.GetVolumeInformation
+	diskOpenPdhQuery           = winapi.OpenPdhQuery
+	diskAddEnglishCounter      = winapi.AddEnglishCounter
+	diskCollectQueryData       = winapi.CollectQueryData
+	diskGetFormattedCounter    = winapi.GetFormattedCounterArrayDouble
+)
+
 func NewDiskCollector() *DiskCollector { return &DiskCollector{} }
 
 func (d *DiskCollector) Collect() metrics.DiskMetrics {
-	roots, err := winapi.GetLogicalDriveStrings()
+	roots, err := diskGetLogicalDriveStrings()
 	if err != nil {
 		return metrics.DiskMetrics{}
 	}
@@ -34,16 +47,16 @@ func (d *DiskCollector) Collect() metrics.DiskMetrics {
 	readBPS, writeBPS, readIOPS, writeIOPS := d.samplePerfCounters()
 	out := metrics.DiskMetrics{Drives: make([]metrics.DriveInfo, 0, len(roots))}
 	for _, root := range roots {
-		t := winapi.GetDriveType(root)
+		t := diskGetDriveType(root)
 		if t != winapi.DRIVE_FIXED && t != winapi.DRIVE_REMOVABLE && t != winapi.DRIVE_REMOTE {
 			continue
 		}
-		_, total, free, err := winapi.GetDiskFreeSpaceEx(root)
+		_, total, free, err := diskGetDiskFreeSpaceEx(root)
 		if err != nil || total == 0 {
 			continue
 		}
 		used := total - free
-		label, fs := winapi.GetVolumeInformation(root)
+		label, fs := diskGetVolumeInformation(root)
 		instance := strings.ToLower(strings.TrimRight(root, "\\"))
 		out.Drives = append(out.Drives, metrics.DriveInfo{
 			Letter:     strings.TrimRight(root, "\\"),
@@ -72,13 +85,13 @@ func (d *DiskCollector) samplePerfCounters() (map[string]float64, map[string]flo
 	if d.perf == nil {
 		return map[string]float64{}, map[string]float64{}, map[string]float64{}, map[string]float64{}
 	}
-	if err := winapi.CollectQueryData(d.perf.query); err != nil {
+	if err := diskCollectQueryData(d.perf.query); err != nil {
 		return map[string]float64{}, map[string]float64{}, map[string]float64{}, map[string]float64{}
 	}
-	readBPS, err1 := winapi.GetFormattedCounterArrayDouble(d.perf.readBPS)
-	writeBPS, err2 := winapi.GetFormattedCounterArrayDouble(d.perf.writeBPS)
-	readIOPS, err3 := winapi.GetFormattedCounterArrayDouble(d.perf.readIOPS)
-	writeIOPS, err4 := winapi.GetFormattedCounterArrayDouble(d.perf.writeIOPS)
+	readBPS, err1 := diskGetFormattedCounter(d.perf.readBPS)
+	writeBPS, err2 := diskGetFormattedCounter(d.perf.writeBPS)
+	readIOPS, err3 := diskGetFormattedCounter(d.perf.readIOPS)
+	writeIOPS, err4 := diskGetFormattedCounter(d.perf.writeIOPS)
 	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 		return map[string]float64{}, map[string]float64{}, map[string]float64{}, map[string]float64{}
 	}
@@ -86,28 +99,28 @@ func (d *DiskCollector) samplePerfCounters() (map[string]float64, map[string]flo
 }
 
 func newDiskPerfCounters() (*diskPerfCounters, error) {
-	query, err := winapi.OpenPdhQuery()
+	query, err := diskOpenPdhQuery()
 	if err != nil {
 		return nil, err
 	}
 	perf := &diskPerfCounters{query: query}
-	if perf.readBPS, err = winapi.AddEnglishCounter(query, `\LogicalDisk(*)\Disk Read Bytes/sec`); err != nil {
+	if perf.readBPS, err = diskAddEnglishCounter(query, `\LogicalDisk(*)\Disk Read Bytes/sec`); err != nil {
 		query.Close()
 		return nil, err
 	}
-	if perf.writeBPS, err = winapi.AddEnglishCounter(query, `\LogicalDisk(*)\Disk Write Bytes/sec`); err != nil {
+	if perf.writeBPS, err = diskAddEnglishCounter(query, `\LogicalDisk(*)\Disk Write Bytes/sec`); err != nil {
 		query.Close()
 		return nil, err
 	}
-	if perf.readIOPS, err = winapi.AddEnglishCounter(query, `\LogicalDisk(*)\Disk Reads/sec`); err != nil {
+	if perf.readIOPS, err = diskAddEnglishCounter(query, `\LogicalDisk(*)\Disk Reads/sec`); err != nil {
 		query.Close()
 		return nil, err
 	}
-	if perf.writeIOPS, err = winapi.AddEnglishCounter(query, `\LogicalDisk(*)\Disk Writes/sec`); err != nil {
+	if perf.writeIOPS, err = diskAddEnglishCounter(query, `\LogicalDisk(*)\Disk Writes/sec`); err != nil {
 		query.Close()
 		return nil, err
 	}
-	if err := winapi.CollectQueryData(query); err != nil {
+	if err := diskCollectQueryData(query); err != nil {
 		query.Close()
 		return nil, err
 	}

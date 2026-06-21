@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -516,5 +517,123 @@ func TestBackgroundRunHonorsRootContextCancellation(t *testing.T) {
 	}
 	if run.Error == "" || !strings.Contains(strings.ToLower(run.Error), "context canceled") {
 		t.Fatalf("error=%q want context canceled", run.Error)
+	}
+}
+
+// TestCallAnthropicMarshalError exercises the json.Marshal error branch in
+// callAnthropic by overriding marshalProviderBody to return an error.
+func TestCallAnthropicMarshalError(t *testing.T) {
+	cfg := &config.Config{AI: config.AIConfig{
+		Enabled:              true,
+		Provider:             "anthropic",
+		APIKey:               "sk",
+		Model:                "m",
+		Endpoint:             "http://localhost:1",
+		MaxTokens:            64,
+		MaxRequestsPerMinute: 60,
+		Language:             "en",
+	}}
+	a := NewAdvisor(cfg, storage.NewStore(60, 10), nil, nil)
+
+	orig := marshalProviderBody
+	marshalProviderBody = func(v any) ([]byte, error) {
+		return nil, errors.New("synthetic marshal failure")
+	}
+	defer func() { marshalProviderBody = orig }()
+
+	_, _, err := a.callAnthropic(context.Background(), cfg, "x")
+	if err == nil || !strings.Contains(err.Error(), "synthetic marshal failure") {
+		t.Errorf("expected synthetic marshal failure, got %v", err)
+	}
+}
+
+// TestCallOpenAIMarshalError exercises the json.Marshal error branch in
+// callOpenAI by overriding marshalProviderBody to return an error.
+func TestCallOpenAIMarshalError(t *testing.T) {
+	cfg := &config.Config{AI: config.AIConfig{
+		Enabled:              true,
+		Provider:             "openai",
+		APIKey:               "k",
+		Model:                "m",
+		Endpoint:             "http://localhost:1",
+		MaxTokens:            64,
+		MaxRequestsPerMinute: 60,
+		Language:             "en",
+	}}
+	a := NewAdvisor(cfg, storage.NewStore(60, 10), nil, nil)
+
+	orig := marshalProviderBody
+	marshalProviderBody = func(v any) ([]byte, error) {
+		return nil, errors.New("synthetic openai marshal failure")
+	}
+	defer func() { marshalProviderBody = orig }()
+
+	_, _, err := a.callOpenAI(context.Background(), cfg, "x")
+	if err == nil || !strings.Contains(err.Error(), "synthetic openai marshal failure") {
+		t.Errorf("expected synthetic openai marshal failure, got %v", err)
+	}
+}
+
+// TestCallProviderRoutesBothProviders ensures both callAnthropic and
+// callOpenAI execute through the callProvider dispatcher (the default
+// branch is already covered by TestUnknownProviderError).
+func TestCallProviderRoutesAnthropic(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"content":[{"type":"text","text":"hi"}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{AI: config.AIConfig{
+		Enabled: true, Provider: "anthropic", APIKey: "sk",
+		Endpoint: srv.URL, Model: "m", MaxTokens: 64, MaxRequestsPerMinute: 60, Language: "en",
+	}}
+	a := NewAdvisor(cfg, storage.NewStore(60, 10), nil, nil)
+	ans, usage, err := a.callProvider(context.Background(), cfg, "x")
+	if err != nil {
+		t.Fatalf("callProvider: %v", err)
+	}
+	if ans != "hi" {
+		t.Errorf("ans=%q", ans)
+	}
+	if usage != nil {
+		t.Errorf("expected nil usage for response without usage block, got %+v", usage)
+	}
+}
+
+func TestCallProviderRoutesOpenAI(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{AI: config.AIConfig{
+		Enabled: true, Provider: "openai", APIKey: "k",
+		Endpoint: srv.URL, Model: "m", MaxTokens: 64, MaxRequestsPerMinute: 60, Language: "en",
+	}}
+	a := NewAdvisor(cfg, storage.NewStore(60, 10), nil, nil)
+	ans, _, err := a.callProvider(context.Background(), cfg, "x")
+	if err != nil {
+		t.Fatalf("callProvider: %v", err)
+	}
+	if ans != "ok" {
+		t.Errorf("ans=%q", ans)
+	}
+}
+
+// TestMarshalProviderBodyDefaultIsJSONMarshal guards against accidental
+// reassignment of the package-level variable at init time.
+func TestMarshalProviderBodyDefaultIsJSONMarshal(t *testing.T) {
+	if marshalProviderBody == nil {
+		t.Fatal("marshalProviderBody is nil")
+	}
+	// json.Marshal of a struct with only primitive fields cannot fail.
+	out, err := marshalProviderBody(struct {
+		A string `json:"a"`
+	}{A: "x"})
+	if err != nil {
+		t.Fatalf("default marshal: %v", err)
+	}
+	if string(out) != `{"a":"x"}` {
+		t.Errorf("got %s", out)
 	}
 }

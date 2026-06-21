@@ -14,7 +14,11 @@ import (
 // modelsDevURL is the upstream catalog. It's a single static-ish JSON
 // document that we proxy + cache so the dashboard doesn't have to deal
 // with CORS or constantly hammer it.
-const modelsDevURL = "https://models.dev/api.json"
+//
+// It is a var (not a const) so tests can substitute an invalid URL to
+// exercise the http.NewRequest error branch in refresh.
+var modelsDevURL = "https://models.dev/api.json"
+
 const maxModelsCatalogBytes = 2 << 20
 
 // modelInfo is the trimmed shape we hand to the dashboard. Anything we don't

@@ -50,7 +50,7 @@ func (a *Advisor) callAnthropic(ctx context.Context, cfg *config.Config, prompt 
 			{Role: "user", Content: prompt},
 		},
 	}
-	buf, err := json.Marshal(reqBody)
+	buf, err := marshalProviderBody(reqBody)
 	if err != nil {
 		return "", nil, err
 	}

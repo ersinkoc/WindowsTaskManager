@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -161,4 +162,53 @@ func waitForClientCount(t *testing.T, hub *SSEHub, want int) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("client_count=%d want %d", hub.ClientCount(), want)
+}
+
+// TestNewCSRFSafeTokenError exercises the rand.Read failure branch of
+// newCSRFSafeToken by swapping secureRandomRead with a deterministic
+// error-returning function. This is the only way to cover the branch
+// in normal testing — the real crypto/rand.Read does not fail on any
+// supported platform.
+func TestNewCSRFSafeTokenError(t *testing.T) {
+	saved := secureRandomRead
+	defer func() { secureRandomRead = saved }()
+
+	secureRandomRead = func([]byte) (int, error) {
+		return 0, errors.New("simulated entropy failure")
+	}
+
+	token, err := newCSRFSafeToken()
+	if err == nil {
+		t.Fatalf("expected error, got token=%q", token)
+	}
+	if token != "" {
+		t.Errorf("token=%q want empty on error", token)
+	}
+	if !strings.Contains(err.Error(), "simulated entropy failure") {
+		t.Errorf("err=%v want wrap of simulated failure", err)
+	}
+}
+
+// TestNewReturnsErrorWhenCSRFFails covers the New() error path triggered
+// when newCSRFSafeToken cannot generate a token. With secureRandomRead
+// stubbed to fail, New must return the wrapped error rather than a
+// partially-constructed *Server.
+func TestNewReturnsErrorWhenCSRFFails(t *testing.T) {
+	saved := secureRandomRead
+	defer func() { secureRandomRead = saved }()
+
+	secureRandomRead = func([]byte) (int, error) {
+		return 0, errors.New("entropy denied")
+	}
+
+	s, err := New(Options{Version: "test"})
+	if err == nil {
+		t.Fatalf("expected error from New, got server=%+v", s)
+	}
+	if s != nil {
+		t.Errorf("server=%+v want nil on error", s)
+	}
+	if !strings.Contains(err.Error(), "entropy denied") {
+		t.Errorf("err=%v want wrap of entropy denied", err)
+	}
 }

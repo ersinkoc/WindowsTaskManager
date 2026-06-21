@@ -18,9 +18,14 @@ type Window struct {
 	onClose func()
 }
 
+// newWebView is a test seam: production code calls the real
+// webview2.NewWithOptions; tests swap in a stub that returns nil to
+// exercise the early-return branch deterministically.
+var newWebView = webview2.NewWithOptions
+
 func New(url, title string, width, height int, onDone func()) *Window {
 	// Create webview2 in a normal decorated window first
-	w := webview2.NewWithOptions(webview2.WebViewOptions{
+	w := newWebView(webview2.WebViewOptions{
 		Debug:     false,
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{

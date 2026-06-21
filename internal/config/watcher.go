@@ -13,6 +13,13 @@ import (
 
 const watcherWaitInterval = 500 * time.Millisecond
 
+// waitForSingleObject is the Windows API used by Start to block until a
+// directory-change notification fires. It is a package-level variable so
+// tests can substitute a stub that returns synthetic values to exercise the
+// error / default branches of Start, which are unreachable in normal
+// operation against a valid change-notification handle.
+var waitForSingleObject = windows.WaitForSingleObject
+
 // Watcher uses native Windows directory change notifications to reload the
 // active config file after atomic save/rename operations.
 type Watcher struct {
@@ -49,7 +56,7 @@ func (w *Watcher) Start(ctx context.Context) {
 		default:
 		}
 
-		event, err := windows.WaitForSingleObject(handle, uint32(watcherWaitInterval/time.Millisecond))
+		event, err := waitForSingleObject(handle, uint32(watcherWaitInterval/time.Millisecond))
 		if err != nil {
 			w.pollStart(ctx)
 			return

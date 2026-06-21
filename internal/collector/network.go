@@ -28,12 +28,15 @@ type NetworkCollector struct {
 	prev map[uint32]netPrev
 }
 
+// Function variable wrapping the Win32 call so tests can stub the failure path.
+var getIfTable2 = winapi.GetIfTable2
+
 func NewNetworkCollector() *NetworkCollector {
 	return &NetworkCollector{prev: make(map[uint32]netPrev)}
 }
 
 func (n *NetworkCollector) Collect() metrics.NetworkMetrics {
-	rows, err := winapi.GetIfTable2()
+	rows, err := getIfTable2()
 	if err != nil || len(rows) == 0 {
 		return metrics.NetworkMetrics{}
 	}

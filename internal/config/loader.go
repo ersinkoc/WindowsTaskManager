@@ -81,12 +81,18 @@ func mergeUniqueFold(base, extra []string) []string {
 	return out
 }
 
+// yamlMarshal is the function used to serialize a *Config to YAML. It is a
+// package-level variable so tests can substitute a stub that returns an
+// error to exercise the error path in Save, which is otherwise unreachable
+// for a well-formed *Config value.
+var yamlMarshal = yaml.Marshal
+
 // Save writes the config as YAML to the given path.
 func Save(path string, cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
-	data, err := yaml.Marshal(cfg)
+	data, err := yamlMarshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}

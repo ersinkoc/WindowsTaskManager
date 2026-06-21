@@ -31,7 +31,13 @@ type Safety struct {
 }
 
 func NewSafety(cfg *config.Config) *Safety {
-	pid := os.Getpid()
+	return newSafetyWithPID(cfg, os.Getpid())
+}
+
+// newSafetyWithPID builds a Safety with an explicit self PID. Exposed
+// only to the test package via the same-package access; production code
+// always goes through NewSafety.
+func newSafetyWithPID(cfg *config.Config, pid int) *Safety {
 	selfPID := uint32(0)
 	if pid > 0 {
 		if uint64(pid) > uint64(math.MaxUint32) {

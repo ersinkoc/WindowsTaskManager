@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -207,6 +208,106 @@ func TestAIConfigNoCfgPath(t *testing.T) {
 	s.handleAIConfigUpdate(rr, req)
 	if rr.Code != 503 {
 		t.Errorf("status=%d want 503", rr.Code)
+	}
+}
+
+// TestAIConfigInvalidJSON covers the readJSON failure branch in
+// handleAIConfigUpdate.
+func TestAIConfigInvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "wtm.yaml")
+	cfg := config.DefaultConfig()
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := newTestServer(t, cfgPath, cfg)
+	req := httptest.NewRequest("POST", "/api/v1/ai/config", strings.NewReader("not-json"))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.handleAIConfigUpdate(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("status=%d want 400", rr.Code)
+	}
+}
+
+// TestAIConfigEmptyProviderDefaultsToAnthropic covers the
+// `if provider == ""` branch.
+func TestAIConfigEmptyProviderDefaultsToAnthropic(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "wtm.yaml")
+	cfg := config.DefaultConfig()
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := newTestServer(t, cfgPath, cfg)
+	body := `{"provider":"","model":"x"}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.handleAIConfigUpdate(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestAIConfigWithExtraHeaders covers the `if body.ExtraHeaders != nil`
+// branch.
+func TestAIConfigWithExtraHeaders(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "wtm.yaml")
+	cfg := config.DefaultConfig()
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := newTestServer(t, cfgPath, cfg)
+	body := `{"provider":"anthropic","model":"x","extra_headers":{"X-Test":"v"}}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.handleAIConfigUpdate(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	reloaded, _ := config.Load(cfgPath)
+	if reloaded.AI.ExtraHeaders["X-Test"] != "v" {
+		t.Errorf("ExtraHeaders=%v", reloaded.AI.ExtraHeaders)
+	}
+}
+
+// TestAIConfigValidationFailure covers the `next.Validate()` failure branch.
+// We pre-seed the cfg with an invalid Server.Port so validate rejects.
+func TestAIConfigValidationFailure(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "wtm.yaml")
+	cfg := config.DefaultConfig()
+	cfg.Server.Port = 70000 // out of range — Validate will reject
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := newTestServer(t, cfgPath, cfg)
+	body := `{"provider":"anthropic","model":"x"}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.handleAIConfigUpdate(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestAIConfigSaveFailure covers the config.Save failure branch by pointing
+// cfgPath at a non-existent Windows drive.
+func TestAIConfigSaveFailure(t *testing.T) {
+	cfgPath := `Z:\nonexistent\wtm.yaml`
+	cfg := config.DefaultConfig()
+	s, _ := newTestServer(t, cfgPath, cfg)
+	body := `{"provider":"anthropic","model":"x"}`
+	req := httptest.NewRequest("POST", "/api/v1/ai/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.handleAIConfigUpdate(rr, req)
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

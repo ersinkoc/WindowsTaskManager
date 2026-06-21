@@ -44,6 +44,17 @@ type GPUCollector struct {
 	cachedTotalVRAM uint64
 }
 
+// Function variables wrapping the Win32/PDH/registry calls so tests can
+// stub the failure paths without invoking real OS APIs.
+var (
+	gpuOpenPdhQuery      = winapi.OpenPdhQuery
+	gpuAddEnglishCounter = winapi.AddEnglishCounter
+	gpuCollectQueryData  = winapi.CollectQueryData
+	gpuGetFormatted      = winapi.GetFormattedCounterArrayDouble
+	gpuRegReadString     = winapi.RegReadString
+	gpuRegReadQWORD      = winapi.RegReadQWORD
+)
+
 func NewGPUCollector() *GPUCollector { return &GPUCollector{} }
 
 func (g *GPUCollector) Collect() metrics.GPUMetrics {
@@ -61,7 +72,7 @@ func (g *GPUCollector) Collect() metrics.GPUMetrics {
 			Available:   false,
 		}
 	}
-	if err := winapi.CollectQueryData(g.perf.query); err != nil {
+	if err := gpuCollectQueryData(g.perf.query); err != nil {
 		return metrics.GPUMetrics{
 			Name:        g.cachedName,
 			VRAMTotal:   g.cachedTotalVRAM,
@@ -141,20 +152,20 @@ func (g *GPUCollector) initInventory() {
 }
 
 func newGPUPerfCounters() (*gpuPerfCounters, error) {
-	query, err := winapi.OpenPdhQuery()
+	query, err := gpuOpenPdhQuery()
 	if err != nil {
 		return nil, err
 	}
 	perf := &gpuPerfCounters{query: query}
-	if perf.util, err = winapi.AddEnglishCounter(query, `\GPU Engine(*)\Utilization Percentage`); err != nil {
+	if perf.util, err = gpuAddEnglishCounter(query, `\GPU Engine(*)\Utilization Percentage`); err != nil {
 		query.Close()
 		return nil, err
 	}
 	// Adapter-memory counters are optional on some Windows installs. Keep the
 	// GPU path alive if utilization is available and just omit VRAM numbers.
-	perf.dedicated, _ = winapi.AddEnglishCounter(query, `\GPU Adapter Memory(*)\Dedicated Usage`)
-	perf.shared, _ = winapi.AddEnglishCounter(query, `\GPU Adapter Memory(*)\Shared Usage`)
-	if err := winapi.CollectQueryData(query); err != nil {
+	perf.dedicated, _ = gpuAddEnglishCounter(query, `\GPU Adapter Memory(*)\Dedicated Usage`)
+	perf.shared, _ = gpuAddEnglishCounter(query, `\GPU Adapter Memory(*)\Shared Usage`)
+	if err := gpuCollectQueryData(query); err != nil {
 		query.Close()
 		return nil, err
 	}
@@ -165,7 +176,7 @@ func formattedCounterArrayDouble(counter winapi.PdhCounter) (map[string]float64,
 	if counter == 0 {
 		return map[string]float64{}, nil
 	}
-	return winapi.GetFormattedCounterArrayDouble(counter)
+	return gpuGetFormatted(counter)
 }
 
 func aggregateGPUSamples(utilValues, dedicatedValues, sharedValues map[string]float64) map[string]gpuAdapterSample {
@@ -272,11 +283,11 @@ func readGPUAdapters() []gpuAdapterInfo {
 	adapters := make([]gpuAdapterInfo, 0, 4)
 	for idx := 0; idx < 32; idx++ {
 		subKey := fmt.Sprintf(`%s\%04d`, classRoot, idx)
-		name, _ := winapi.RegReadString(winapi.HKEY_LOCAL_MACHINE, subKey, "DriverDesc")
+		name, _ := gpuRegReadString(winapi.HKEY_LOCAL_MACHINE, subKey, "DriverDesc")
 		if name == "" {
-			name, _ = winapi.RegReadString(winapi.HKEY_LOCAL_MACHINE, subKey, "HardwareInformation.AdapterString")
+			name, _ = gpuRegReadString(winapi.HKEY_LOCAL_MACHINE, subKey, "HardwareInformation.AdapterString")
 		}
-		totalBytes, _ := winapi.RegReadQWORD(winapi.HKEY_LOCAL_MACHINE, subKey, "HardwareInformation.qwMemorySize")
+		totalBytes, _ := gpuRegReadQWORD(winapi.HKEY_LOCAL_MACHINE, subKey, "HardwareInformation.qwMemorySize")
 		if name == "" && totalBytes == 0 {
 			continue
 		}
@@ -296,7 +307,7 @@ func readGPUAdapters() []gpuAdapterInfo {
 // readGPUName reads a best-effort display adapter name from the registry.
 func readGPUName() string {
 	const path = `SYSTEM\CurrentControlSet\Control\Video\{00000000-0000-0000-0000-000000000000}\0000`
-	if name, err := winapi.RegReadString(winapi.HKEY_LOCAL_MACHINE, path, "DriverDesc"); err == nil && name != "" {
+	if name, err := gpuRegReadString(winapi.HKEY_LOCAL_MACHINE, path, "DriverDesc"); err == nil && name != "" {
 		return name
 	}
 	return "Unknown GPU"

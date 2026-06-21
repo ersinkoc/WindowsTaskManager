@@ -95,12 +95,12 @@ func (c *Controller) Kill(pid uint32, confirm bool) error {
 	if err := c.safety.Check(info, confirm); err != nil {
 		return err
 	}
-	h, err := winapi.OpenProcessHandle(windows.PROCESS_TERMINATE, pid)
+	h, err := seamOpenProcessHandle(windows.PROCESS_TERMINATE, pid)
 	if err != nil {
 		return fmt.Errorf("open process: %w", err)
 	}
-	defer winapi.CloseHandleSafe(h)
-	if err := winapi.TerminateProcessHandle(h, 1); err != nil {
+	defer seamCloseHandleSafe(h)
+	if err := seamTerminateProcess(h, 1); err != nil {
 		return fmt.Errorf("terminate: %w", err)
 	}
 	c.emit(EventKilled, pid, map[string]any{"name": info.Name})
@@ -172,14 +172,14 @@ func (c *Controller) Resume(pid uint32) error {
 }
 
 func suspendOrResumeThreads(pid uint32, suspend bool) error {
-	snap, err := winapi.CreateToolhelp32Snapshot(winapi.TH32CS_SNAPTHREAD, 0)
+	snap, err := seamCreateToolhelp32Snapshot(winapi.TH32CS_SNAPTHREAD, 0)
 	if err != nil {
 		return err
 	}
-	defer winapi.CloseHandleSafe(snap)
+	defer seamCloseHandleSafe(snap)
 
 	var te winapi.THREADENTRY32
-	if err := winapi.Thread32First(snap, &te); err != nil {
+	if err := seamThread32First(snap, &te); err != nil {
 		return err
 	}
 	const access = windows.THREAD_SUSPEND_RESUME
@@ -190,18 +190,18 @@ func suspendOrResumeThreads(pid uint32, suspend bool) error {
 	for {
 		if te.OwnerProcessID == pid {
 			touched++
-			h, err := winapi.OpenThreadHandle(access, te.ThreadID)
+			h, err := seamOpenThreadHandle(access, te.ThreadID)
 			if err != nil {
 				if firstErr == nil {
 					firstErr = fmt.Errorf("open thread %d: %w", te.ThreadID, err)
 				}
 			} else {
 				if suspend {
-					_, err = winapi.SuspendThread(h)
+					_, err = seamSuspendThread(h)
 				} else {
-					_, err = winapi.ResumeThread(h)
+					_, err = seamResumeThread(h)
 				}
-				winapi.CloseHandleSafe(h)
+				seamCloseHandleSafe(h)
 				if err != nil && firstErr == nil {
 					op := "resume"
 					if suspend {
@@ -211,7 +211,7 @@ func suspendOrResumeThreads(pid uint32, suspend bool) error {
 				}
 			}
 		}
-		if err := winapi.Thread32Next(snap, &te); err != nil {
+		if err := seamThread32Next(snap, &te); err != nil {
 			if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
 				return fmt.Errorf("enumerate threads: %w", err)
 			}
@@ -240,12 +240,12 @@ func (c *Controller) SetPriority(pid uint32, class string, confirm bool) error {
 	if !ok {
 		return fmt.Errorf("unknown priority class %q", class)
 	}
-	h, err := winapi.OpenProcessHandle(windows.PROCESS_SET_INFORMATION, pid)
+	h, err := seamOpenProcessHandle(windows.PROCESS_SET_INFORMATION, pid)
 	if err != nil {
 		return err
 	}
-	defer winapi.CloseHandleSafe(h)
-	if err := winapi.SetPriorityClass(h, priority); err != nil {
+	defer seamCloseHandleSafe(h)
+	if err := seamSetPriorityClass(h, priority); err != nil {
 		return err
 	}
 	c.emit(EventPriority, pid, map[string]any{"class": class})
@@ -282,12 +282,12 @@ func (c *Controller) SetAffinity(pid uint32, mask uint64, confirm bool) error {
 	if mask == 0 {
 		return fmt.Errorf("affinity mask must include at least one CPU")
 	}
-	h, err := winapi.OpenProcessHandle(windows.PROCESS_SET_INFORMATION, pid)
+	h, err := seamOpenProcessHandle(windows.PROCESS_SET_INFORMATION, pid)
 	if err != nil {
 		return err
 	}
-	defer winapi.CloseHandleSafe(h)
-	if err := winapi.SetProcessAffinityMask(h, uintptr(mask)); err != nil {
+	defer seamCloseHandleSafe(h)
+	if err := seamSetProcessAffinityMask(h, uintptr(mask)); err != nil {
 		return err
 	}
 	c.emit(EventAffinity, pid, map[string]any{"mask": mask})
@@ -314,24 +314,24 @@ func (c *Controller) Limit(pid uint32, cpuPct int, maxBytes uint64, confirm bool
 
 	if existing, ok := c.jobs[pid]; ok {
 		// Replace existing job by closing it and creating fresh.
-		winapi.CloseHandleSafe(existing.job)
+		seamCloseHandleSafe(existing.job)
 		delete(c.jobs, pid)
 	}
 
-	job, err := winapi.CreateJobObject()
+	job, err := seamCreateJobObject()
 	if err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 
-	procH, err := winapi.OpenProcessHandle(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, pid)
+	procH, err := seamOpenProcessHandle(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, pid)
 	if err != nil {
-		winapi.CloseHandleSafe(job)
+		seamCloseHandleSafe(job)
 		return fmt.Errorf("open process: %w", err)
 	}
-	defer winapi.CloseHandleSafe(procH)
+	defer seamCloseHandleSafe(procH)
 
-	if err := winapi.AssignProcessToJobObject(job, procH); err != nil {
-		winapi.CloseHandleSafe(job)
+	if err := seamAssignProcessToJobObject(job, procH); err != nil {
+		seamCloseHandleSafe(job)
 		return fmt.Errorf("assign job: %w", err)
 	}
 
@@ -339,13 +339,13 @@ func (c *Controller) Limit(pid uint32, cpuPct int, maxBytes uint64, confirm bool
 		var ext winapi.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
 		ext.BasicLimitInformation.LimitFlags = winapi.JOB_OBJECT_LIMIT_PROCESS_MEMORY
 		ext.ProcessMemoryLimit = uintptr(maxBytes)
-		if err := winapi.SetInformationJobObject(
+		if err := seamSetInformationJobObject(
 			job,
 			winapi.JobObjectExtendedLimitInformation,
 			unsafe.Pointer(&ext), // #nosec G103 -- Audited Win32 unsafe interop.
 			uint32(unsafe.Sizeof(ext)),
 		); err != nil {
-			winapi.CloseHandleSafe(job)
+			seamCloseHandleSafe(job)
 			return fmt.Errorf("set memory limit: %w", err)
 		}
 	}
@@ -355,13 +355,13 @@ func (c *Controller) Limit(pid uint32, cpuPct int, maxBytes uint64, confirm bool
 		rate.ControlFlags = winapi.JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | winapi.JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP
 		// CpuRate is in 1/100 of a percent (0..10000).
 		rate.CpuRate = uint32(cpuPct) * 100
-		if err := winapi.SetInformationJobObject(
+		if err := seamSetInformationJobObject(
 			job,
 			winapi.JobObjectCpuRateControlInformation,
 			unsafe.Pointer(&rate), // #nosec G103 -- Audited Win32 unsafe interop.
 			uint32(unsafe.Sizeof(rate)),
 		); err != nil {
-			winapi.CloseHandleSafe(job)
+			seamCloseHandleSafe(job)
 			return fmt.Errorf("set cpu limit: %w", err)
 		}
 	}
@@ -379,7 +379,7 @@ func (c *Controller) ClearLimit(pid uint32) error {
 	if !ok {
 		return fmt.Errorf("no active limit for pid %d", pid)
 	}
-	winapi.CloseHandleSafe(entry.job)
+	seamCloseHandleSafe(entry.job)
 	delete(c.jobs, pid)
 	c.emit(EventLimitCleared, pid, nil)
 	return nil

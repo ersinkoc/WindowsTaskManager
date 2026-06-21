@@ -139,11 +139,7 @@ func (s *Server) handleTelegramTest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusGatewayTimeout, "timeout", "Telegram API did not respond in time")
 	case err := <-done:
 		if err != nil {
-			if reqErr != nil {
-				writeError(w, http.StatusBadGateway, "connection_failed", fmt.Sprintf("failed to reach Telegram: %v", reqErr))
-			} else {
-				writeError(w, http.StatusBadGateway, "telegram_error", err.Error())
-			}
+			writeError(w, http.StatusBadGateway, "connection_failed", fmt.Sprintf("failed to reach Telegram: %v", err))
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "bot token is valid"})
