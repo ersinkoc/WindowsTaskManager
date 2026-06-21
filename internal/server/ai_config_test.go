@@ -19,7 +19,7 @@ import (
 func newTestServer(t *testing.T, cfgPath string, cfg *config.Config) (*Server, *[]*config.Config) {
 	t.Helper()
 	var applied []*config.Config
-	s := New(Options{
+	s, err := New(Options{
 		Cfg:     cfg,
 		CfgPath: cfgPath,
 		Emitter: event.NewEmitter(),
@@ -28,6 +28,9 @@ func newTestServer(t *testing.T, cfgPath string, cfg *config.Config) (*Server, *
 			applied = append(applied, c)
 		},
 	})
+	if err != nil {
+		t.Fatalf("newTestServer: %v", err)
+	}
 	return s, &applied
 }
 

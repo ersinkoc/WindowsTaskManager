@@ -68,10 +68,14 @@ type Options struct {
 	Version    string
 }
 
-func New(opts Options) *Server {
+func New(opts Options) (*Server, error) {
 	version := opts.Version
 	if strings.TrimSpace(version) == "" {
 		version = "dev"
+	}
+	csrfToken, err := newCSRFSafeToken()
+	if err != nil {
+		return nil, fmt.Errorf("server: generate csrf token: %w", err)
 	}
 	s := &Server{
 		cfg:        opts.Cfg,
@@ -84,13 +88,13 @@ func New(opts Options) *Server {
 		advisor:    opts.Advisor,
 		staticFS:   opts.StaticFS,
 		version:    version,
-		csrfToken:  newCSRFSafeToken(),
+		csrfToken:  csrfToken,
 		router:     NewRouter(),
 		hub:        NewSSEHub(opts.Emitter),
 		aiExec:     newAISuggestionStore(15 * time.Minute),
 	}
 	s.routes()
-	return s
+	return s, nil
 }
 
 // SetConfig hot-swaps the active config (after a watcher reload).
@@ -270,10 +274,10 @@ func samePort(originPort, requestPort string) bool {
 	return originPort == requestPort
 }
 
-func newCSRFSafeToken() string {
+func newCSRFSafeToken() (string, error) {
 	var buf [32]byte
 	if _, err := rand.Read(buf[:]); err != nil {
-		panic(fmt.Errorf("generate csrf token: %w", err))
+		return "", fmt.Errorf("generate csrf token: %w", err)
 	}
-	return hex.EncodeToString(buf[:])
+	return hex.EncodeToString(buf[:]), nil
 }

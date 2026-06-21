@@ -121,7 +121,7 @@ func main() {
 	// from any previous run's active set.
 	clearDisabledDetectorAlerts(alerts, cfg)
 
-	srv = server.New(server.Options{
+	srv, err = server.New(server.Options{
 		Cfg:        cfg,
 		CfgPath:    cfgPath,
 		OnCfgApply: applyConfig,
@@ -133,6 +133,9 @@ func main() {
 		StaticFS:   frontend.FS(),
 		Version:    version,
 	})
+	if err != nil {
+		log.Fatalf("initialize server: %v", err)
+	}
 
 	rootCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()

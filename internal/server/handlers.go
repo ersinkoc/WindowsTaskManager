@@ -673,7 +673,9 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", contentTypeFor(upath))
-	_, _ = io.Copy(w, f)
+	if _, err := io.Copy(w, f); err != nil {
+		log.Printf("serve static %s: %v", upath, err)
+	}
 }
 
 func serveIndexHTML(w http.ResponseWriter, r io.Reader, csrfToken string) {
@@ -684,7 +686,9 @@ func serveIndexHTML(w http.ResponseWriter, r io.Reader, csrfToken string) {
 	}
 	body = bytes.ReplaceAll(body, []byte("__WTM_CSRF_TOKEN__"), []byte(csrfToken))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(body)
+	if _, err := w.Write(body); err != nil {
+		log.Printf("serve index.html: %v", err)
+	}
 }
 
 func contentTypeFor(name string) string {
