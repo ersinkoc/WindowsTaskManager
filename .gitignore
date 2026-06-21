@@ -31,3 +31,24 @@ Thumbs.db
 .vs/
 
 .dfmt/
+.wrongstack/
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Generated reports and logs
+security-report/
+.playwright-mcp/
+*.log
+
+# Screenshots and runtime artifacts
+*-screenshot.png
+overview-*.png
+network-*.png
+netcheck.png
+history-response.json
+
+# Package manager artifacts at repo root (keep frontend/package.json tracked)
+/package.json
+/package-lock.json

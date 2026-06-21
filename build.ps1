@@ -7,7 +7,7 @@
 #   .\build.ps1 -Out wtm-0.1.0.exe   # write to a specific file name
 
 param(
-    [string]$Version = "0.3.0",
+    [string]$Version = "0.4.0",
     [string]$Out = "wtm.exe"
 )
 

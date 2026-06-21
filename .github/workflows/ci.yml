@@ -8,7 +8,7 @@ on:
 
 env:
   GO_VERSION: "1.25"
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 jobs:
   frontend:
@@ -23,11 +23,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "frontend/node_modules"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci --prefix frontend
+
+      - name: Lint
+        run: npm run lint --prefix frontend
 
       - name: Type check
         run: npm run typecheck --prefix frontend
@@ -87,7 +90,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "frontend/node_modules"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies

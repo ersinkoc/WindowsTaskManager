@@ -53,7 +53,7 @@ configs/                reference config
 ## Prerequisites
 
 - Windows
-- Go `1.25+` (`go.mod` pins toolchain `go1.26.2`)
+- Go `1.25+` (`go.mod` pins toolchain `go1.26.4`)
 - Node.js `20+` if you want to change the frontend
 
 ## Build
