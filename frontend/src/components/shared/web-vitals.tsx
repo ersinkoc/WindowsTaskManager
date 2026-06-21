@@ -19,9 +19,8 @@ export function WebVitals() {
     };
 
     const logMetric = (name: string) => (metric: Metric) => {
-      console.log(`[WebVitals] ${name}: ${metric.value.toFixed(2)}ms (${metric.rating})`);
       if (metric.rating === "poor") {
-        console.warn(`[WebVitals] ${name} needs improvement`);
+        console.warn(`[WebVitals] ${name} needs improvement (${metric.value.toFixed(2)}ms)`);
       }
     };
 
