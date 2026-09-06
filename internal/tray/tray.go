@@ -329,18 +329,24 @@ func (t *Tray) showBalloon(title, body string, icon uint32) {
 	}
 }
 
+// copyToFixed copies s into a fixed-size Win32 UTF-16 buffer, always
+// leaving a NUL terminator: on truncation the final slot is reserved for
+// the terminator instead of being filled with data. An unterminated
+// szInfo/szInfoTitle makes Shell_NotifyIconW scan past the field into
+// adjacent NOTIFYICONDATAW memory.
 func copyToFixed(dst []uint16, s string) {
+	if len(dst) == 0 {
+		return
+	}
+	limit := len(dst) - 1 // reserve the final slot for the terminator
 	src := windows.StringToUTF16(s)
-	n := len(src)
-	if n > len(dst) {
-		n = len(dst)
+	if len(src) > limit {
+		copy(dst, src[:limit])
+		dst[limit] = 0
+		return
 	}
-	for i := 0; i < n; i++ {
-		dst[i] = src[i]
-	}
-	if n < len(dst) {
-		dst[n-1] = 0
-	}
+	// src fits and already carries its own NUL terminator.
+	copy(dst, src)
 }
 
 // Compile-time check that we use unsafe (silences linters that may flag the

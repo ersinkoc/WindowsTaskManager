@@ -226,12 +226,14 @@ func TestCopyToFixed(t *testing.T) {
 		}
 	})
 
-	t.Run("string truncated to dst length fills every slot", func(t *testing.T) {
+	t.Run("string truncated to dst length reserves final slot for NUL", func(t *testing.T) {
 		dst := make([]uint16, 4)
 		copyToFixed(dst, "abcd")
-		// StringToUTF16("abcd") -> [a,b,c,d,0] len=5; n=4 (capped to len(dst)).
-		// Loop copies 0..3; since n==len(dst) the trailing NUL write is skipped.
-		want := []uint16{'a', 'b', 'c', 'd'}
+		// StringToUTF16("abcd") -> [a,b,c,d,0] len=5 > limit=3: copy the
+		// first 3 chars and terminate in the reserved final slot. The old
+		// behavior filled every slot with data, leaving the buffer
+		// unterminated for Shell_NotifyIconW.
+		want := []uint16{'a', 'b', 'c', 0}
 		for i, w := range want {
 			if dst[i] != w {
 				t.Errorf("dst[%d] = %#x, want %#x", i, dst[i], w)
@@ -256,8 +258,8 @@ func TestCopyToFixed(t *testing.T) {
 
 	t.Run("long string truncated", func(t *testing.T) {
 		dst := make([]uint16, 3)
-		copyToFixed(dst, "hello world") // n capped at 3
-		want := []uint16{'h', 'e', 'l'}
+		copyToFixed(dst, "hello world") // truncated to limit 2 + reserved NUL
+		want := []uint16{'h', 'e', 0}
 		for i, w := range want {
 			if dst[i] != w {
 				t.Errorf("dst[%d] = %#x, want %#x", i, dst[i], w)
