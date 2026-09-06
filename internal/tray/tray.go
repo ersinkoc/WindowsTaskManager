@@ -168,7 +168,11 @@ func (t *Tray) create() error {
 	if err != nil {
 		return err
 	}
+	// hwnd is read by Stop() from other goroutines under t.mu; the write
+	// here must take the same lock or the mutex discipline is meaningless.
+	t.mu.Lock()
 	t.hwnd = hwnd
+	t.mu.Unlock()
 
 	t.nid = winapi.NOTIFYICONDATAW{
 		Wnd:             hwnd,
@@ -190,7 +194,9 @@ func (t *Tray) destroy() {
 	}
 	_ = winapi.ShellNotifyIcon(winapi.NIM_DELETE, &t.nid)
 	winapi.DestroyWindow(t.hwnd)
+	t.mu.Lock()
 	t.hwnd = 0
+	t.mu.Unlock()
 }
 
 // wndProc is the window procedure callback. Must match WNDPROC signature.

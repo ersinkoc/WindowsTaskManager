@@ -82,7 +82,12 @@ func Test00_LifecycleRunStartAndStop(t *testing.T) {
 	// TranslateMessage + DispatchMessage lines that a pure WM_QUIT exit
 	// would skip.
 	const wmNull uint32 = 0x0000
-	winapi.PostMessage(tr.hwnd, wmNull, 0, 0)
+	// hwnd was written by the Run goroutine; read it under the same mutex
+	// instead of racing with create().
+	tr.mu.Lock()
+	hwnd := tr.hwnd
+	tr.mu.Unlock()
+	winapi.PostMessage(hwnd, wmNull, 0, 0)
 	// Give the loop a moment to drain WM_NULL before we post WM_QUIT.
 	time.Sleep(100 * time.Millisecond)
 
