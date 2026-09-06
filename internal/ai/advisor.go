@@ -99,12 +99,18 @@ func (a *Advisor) Start(ctx context.Context) {
 	a.mu.Unlock()
 }
 
-// SetConfig hot-swaps the active config.
+// SetConfig hot-swaps the active config. The rate limiter is rebuilt only
+// when the per-minute limit actually changed: SetConfig runs on every config
+// save (any section) via applyConfig, so an unconditional rebuild would
+// refill the bucket and let callers bypass the cost guard by toggling an
+// unrelated setting between AI calls.
 func (a *Advisor) SetConfig(cfg *config.Config) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.cfg == nil || a.cfg.AI.MaxRequestsPerMinute != cfg.AI.MaxRequestsPerMinute {
+		a.rl = NewTokenBucket(cfg.AI.MaxRequestsPerMinute)
+	}
 	a.cfg = cfg
-	a.rl = NewTokenBucket(cfg.AI.MaxRequestsPerMinute)
 	a.bgMu.Lock()
 	a.bg.applyConfig(cfg)
 	a.bgMu.Unlock()
