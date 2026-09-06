@@ -24,7 +24,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-hook-form": "^7.72.1",
-    "react-router": "^7.14.0",
+    "react-router": "^7.18.3",
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
