@@ -203,17 +203,17 @@ func GetIfTable2() ([]IfRow2, error) {
 }
 
 // parseIfRow2 reads the fields we need at known offsets within MIB_IF_ROW2.
-// Field offsets are derived from the documented Win32 layout.
 func parseIfRow2(base unsafe.Pointer) IfRow2 {
-	// Layout (Windows 10/11):
-	// 0   InterfaceLuid (8)
-	// 8   InterfaceIndex (4)
-	// 12  InterfaceGuid (16)
-	// 28  Alias[257] uint16 = 514 bytes
-	// 542 Description[257] uint16 = 514 bytes
+	// Layout per the Windows SDK netioapi.h (offsets verified with offsetof
+	// against the real headers on Windows x64):
+	// 0    InterfaceLuid (8)
+	// 8    InterfaceIndex (4)
+	// 12   InterfaceGuid (16)
+	// 28   Alias[257] uint16 (514 bytes)
+	// 542  Description[257] uint16 (514 bytes)
 	// 1056 PhysicalAddressLength (4)
-	// 1060 PhysicalAddress[32] (32)
-	// 1092 PermanentPhysicalAddress[32] (32)
+	// 1060 PhysicalAddress[32]
+	// 1092 PermanentPhysicalAddress[32]
 	// 1124 Mtu (4)
 	// 1128 Type (4)
 	// 1132 TunnelType (4)
@@ -221,12 +221,32 @@ func parseIfRow2(base unsafe.Pointer) IfRow2 {
 	// 1140 PhysicalMediumType (4)
 	// 1144 AccessType (4)
 	// 1148 DirectionType (4)
-	// 1152 InterfaceAndOperStatusFlags (1) + padding
-	// 1153 OperStatus (4) ... but proper offset begins after flags
-	// We read more conservatively using the documented alignment.
-	//
-	// To remain robust we read scalar fields at conservative offsets that
-	// match a representative struct dump on Windows 10/11.
+	// 1152 InterfaceAndOperStatusFlags (1-byte bitfield) + 3 padding
+	// 1156 OperStatus (4)
+	// 1160 AdminStatus (4)
+	// 1164 MediaConnectState (4)
+	// 1168 NetworkGuid GUID (16)
+	// 1184 ConnectionType (4) + 4 padding
+	// 1192 TransmitLinkSpeed (8)
+	// 1200 ReceiveLinkSpeed (8)
+	// 1208 InOctets (8)
+	// 1216 InUcastPkts (8)
+	// 1224 InNUcastPkts (8)
+	// 1232 InDiscards (8)
+	// 1240 InErrors (8)
+	// 1248 InUnknownProtos (8)
+	// 1256 InUcastOctets (8)
+	// 1264 InMulticastOctets (8)
+	// 1272 InBroadcastOctets (8)
+	// 1280 OutOctets (8)
+	// 1288 OutUcastPkts (8)
+	// 1296 OutNUcastPkts (8)
+	// 1304 OutDiscards (8)
+	// 1312 OutErrors (8)
+	// 1320 OutUcastOctets (8)
+	// 1328 OutMulticastOctets (8)
+	// 1336 OutBroadcastOctets (8)
+	// 1344 OutQLen (8) => sizeof(MIB_IF_ROW2) == 1352
 	row := IfRow2{}
 	row.Index = *(*uint32)(unsafe.Add(base, 8))
 
@@ -236,18 +256,18 @@ func parseIfRow2(base unsafe.Pointer) IfRow2 {
 	row.Description = utf16NulString(descU16[:])
 
 	row.Type = *(*uint32)(unsafe.Add(base, 1128))
-	row.OperStatus = *(*uint32)(unsafe.Add(base, 1160))
+	row.OperStatus = *(*uint32)(unsafe.Add(base, 1156))
 
 	row.SpeedTx = *(*uint64)(unsafe.Add(base, 1192))
 	row.SpeedRx = *(*uint64)(unsafe.Add(base, 1200))
 
-	row.InOctets = *(*uint64)(unsafe.Add(base, 1216))
-	row.InUcastPkts = *(*uint64)(unsafe.Add(base, 1224))
-	row.InErrors = *(*uint64)(unsafe.Add(base, 1264))
+	row.InOctets = *(*uint64)(unsafe.Add(base, 1208))
+	row.InUcastPkts = *(*uint64)(unsafe.Add(base, 1216))
+	row.InErrors = *(*uint64)(unsafe.Add(base, 1240))
 
 	row.OutOctets = *(*uint64)(unsafe.Add(base, 1280))
 	row.OutUcastPkts = *(*uint64)(unsafe.Add(base, 1288))
-	row.OutErrors = *(*uint64)(unsafe.Add(base, 1328))
+	row.OutErrors = *(*uint64)(unsafe.Add(base, 1312))
 	return row
 }
 
