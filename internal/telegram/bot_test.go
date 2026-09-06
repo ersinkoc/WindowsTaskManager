@@ -269,9 +269,14 @@ func TestLoopTokenChangeResetsOffset(t *testing.T) {
 	bot.lastToken = ""
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go bot.loop(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		bot.loop(ctx)
+	}()
 	time.Sleep(150 * time.Millisecond)
 	cancel()
+	<-done
 	if calls == 0 {
 		t.Fatal("loop should have made at least one HTTP call")
 	}
@@ -345,9 +350,14 @@ func TestLoopSkipsEmptyAndDisallowed(t *testing.T) {
 	})}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go bot.loop(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		bot.loop(ctx)
+	}()
 	time.Sleep(80 * time.Millisecond)
 	cancel()
+	<-done
 	if bot.offset < 5 {
 		t.Fatalf("offset=%d, expected >= 5 (we processed all updates)", bot.offset)
 	}

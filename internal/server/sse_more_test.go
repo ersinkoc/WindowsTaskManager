@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -101,6 +102,40 @@ func (n *nonFlusherWriter) Write(b []byte) (int, error) {
 }
 func (n *nonFlusherWriter) WriteHeader(code int) { n.code = code }
 
+// lockedRecorder synchronizes writes coming from the SSE handler goroutine
+// with reads from the test goroutine: httptest.ResponseRecorder is not safe
+// for concurrent use, so polling a live recorder's body is a data race.
+type lockedRecorder struct {
+	mu sync.Mutex
+	rr *httptest.ResponseRecorder
+}
+
+func (l *lockedRecorder) Header() http.Header { return l.rr.Header() }
+
+func (l *lockedRecorder) Write(b []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.rr.Write(b)
+}
+
+func (l *lockedRecorder) WriteHeader(code int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.rr.WriteHeader(code)
+}
+
+func (l *lockedRecorder) Flush() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.rr.Flush()
+}
+
+func (l *lockedRecorder) body() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.rr.Body.String()
+}
+
 // TestSSEHandlerHeartbeat covers the heartbeat branch in the SSE handler
 // (line 2825 in coverage). The handler's heartbeat ticker fires every 25s,
 // so this test takes ~26 seconds to run. Skipped by default in -short mode.
@@ -109,12 +144,12 @@ func TestSSEHandlerHeartbeat(t *testing.T) {
 		t.Skip("skipping heartbeat test in short mode")
 	}
 	hub := NewSSEHub(nil)
-	rr := httptest.NewRecorder()
+	rec := &lockedRecorder{rr: httptest.NewRecorder()}
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 	done := make(chan struct{})
 	go func() {
-		hub.Handler()(rr, req)
+		hub.Handler()(rec, req)
 		close(done)
 	}()
 	// Wait for client to register and the hello to be flushed.
@@ -122,7 +157,7 @@ func TestSSEHandlerHeartbeat(t *testing.T) {
 	// Wait for the heartbeat (every 25s) to fire at least once.
 	deadline := time.Now().Add(27 * time.Second)
 	for time.Now().Before(deadline) {
-		if strings.Contains(rr.Body.String(), ": ping") {
+		if strings.Contains(rec.body(), ": ping") {
 			cancel()
 			<-done
 			return
