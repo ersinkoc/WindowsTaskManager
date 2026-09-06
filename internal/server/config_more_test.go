@@ -85,17 +85,29 @@ func TestCloneConfigDeepCopy(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Controller.ProtectedProcesses = []string{"a.exe", "b.exe"}
 	cfg.Anomaly.IgnoreProcesses = []string{"c.exe"}
+	cfg.Anomaly.HungProcess.IdleWhitelist = []string{"w1"}
+	cfg.Anomaly.RunawayCPU.HighCPUWhitelist = []string{"w2"}
+	cfg.Anomaly.NewProcess.SuspiciousPaths = []string{`C:\Temp`}
 	cfg.Rules = []config.Rule{{Name: "rule"}}
 	cfg.AI.ExtraHeaders = map[string]string{"X": "Y"}
+	cfg.AI.AutoAction.AllowedActions = []string{"ignore"}
 	cfg.WellKnownPorts = map[uint16]string{80: "HTTP"}
+	cfg.Telegram.AllowedChatIDs = []int64{7}
+	cfg.Telegram.NotificationTypes = []string{"runaway_cpu"}
 
 	clone := cloneConfig(cfg)
 	// Mutate the clone.
 	clone.Controller.ProtectedProcesses[0] = "MUTATED"
 	clone.Anomaly.IgnoreProcesses[0] = "MUTATED"
+	clone.Anomaly.HungProcess.IdleWhitelist[0] = "MUTATED"
+	clone.Anomaly.RunawayCPU.HighCPUWhitelist[0] = "MUTATED"
+	clone.Anomaly.NewProcess.SuspiciousPaths[0] = "MUTATED"
 	clone.Rules[0].Name = "MUTATED"
 	clone.AI.ExtraHeaders["X"] = "MUTATED"
+	clone.AI.AutoAction.AllowedActions[0] = "MUTATED"
 	clone.WellKnownPorts[80] = "MUTATED"
+	clone.Telegram.AllowedChatIDs[0] = -1
+	clone.Telegram.NotificationTypes[0] = "MUTATED"
 
 	// Original should be unchanged.
 	if cfg.Controller.ProtectedProcesses[0] != "a.exe" {
@@ -104,14 +116,32 @@ func TestCloneConfigDeepCopy(t *testing.T) {
 	if cfg.Anomaly.IgnoreProcesses[0] != "c.exe" {
 		t.Errorf("ignore list not deep-copied: %v", cfg.Anomaly.IgnoreProcesses)
 	}
+	if cfg.Anomaly.HungProcess.IdleWhitelist[0] != "w1" {
+		t.Errorf("hung-process idle whitelist not deep-copied: %v", cfg.Anomaly.HungProcess.IdleWhitelist)
+	}
+	if cfg.Anomaly.RunawayCPU.HighCPUWhitelist[0] != "w2" {
+		t.Errorf("runaway CPU whitelist not deep-copied: %v", cfg.Anomaly.RunawayCPU.HighCPUWhitelist)
+	}
+	if cfg.Anomaly.NewProcess.SuspiciousPaths[0] != `C:\Temp` {
+		t.Errorf("suspicious paths not deep-copied: %v", cfg.Anomaly.NewProcess.SuspiciousPaths)
+	}
 	if cfg.Rules[0].Name != "rule" {
 		t.Errorf("rules not deep-copied: %+v", cfg.Rules[0])
 	}
 	if cfg.AI.ExtraHeaders["X"] != "Y" {
 		t.Errorf("AI extra headers not deep-copied: %v", cfg.AI.ExtraHeaders)
 	}
+	if cfg.AI.AutoAction.AllowedActions[0] != "ignore" {
+		t.Errorf("AI auto-action allowlist not deep-copied: %v", cfg.AI.AutoAction.AllowedActions)
+	}
 	if cfg.WellKnownPorts[80] != "HTTP" {
 		t.Errorf("well-known ports not deep-copied: %v", cfg.WellKnownPorts[80])
+	}
+	if cfg.Telegram.AllowedChatIDs[0] != 7 {
+		t.Errorf("telegram chat IDs not deep-copied: %v", cfg.Telegram.AllowedChatIDs)
+	}
+	if cfg.Telegram.NotificationTypes[0] != "runaway_cpu" {
+		t.Errorf("telegram notification types not deep-copied: %v", cfg.Telegram.NotificationTypes)
 	}
 }
 

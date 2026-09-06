@@ -22,6 +22,7 @@ func cloneConfig(src *config.Config) config.Config {
 	}
 	dst.AI.AutoAction.AllowedActions = append([]string(nil), src.AI.AutoAction.AllowedActions...)
 	dst.Telegram.AllowedChatIDs = append([]int64(nil), src.Telegram.AllowedChatIDs...)
+	dst.Telegram.NotificationTypes = append([]string(nil), src.Telegram.NotificationTypes...)
 	dst.Rules = append([]config.Rule(nil), src.Rules...)
 	return dst
 }
